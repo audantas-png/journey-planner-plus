@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AuthScreen } from "./Auth";
 import { TripMap } from "./Map";
 import { Activities } from "./Activities";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
-  fetchChecklist, fetchGeo, fetchFxRate, PHASES,
+  fetchChecklist, fetchGeo, fetchFxRate, fxRateWithIof, IOF_RATE, PHASES,
   type TripDay, type DayActivity, type BudgetCategory, type Expense, type ChecklistItem,
 } from "./queries";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,17 +24,6 @@ const fmtJPY = (v: number) => "¥" + Math.round(v).toLocaleString("ja-JP");
 const WD = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
 export function Planner() {
-  const [session, setSession] = useState<any>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  if (!ready) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">…</div>;
-  if (!session) return <AuthScreen />;
   return <PlannerApp />;
 }
 
@@ -51,7 +41,8 @@ function PlannerApp() {
   const geo = useQuery({ queryKey: ["geo"], queryFn: fetchGeo });
   const fx = useQuery({ queryKey: ["fx"], queryFn: fetchFxRate, staleTime: 3600_000 });
 
-  const fxRate = fx.data ?? 0.038;
+  const spotFx = fx.data ?? 0.038;
+  const fxRate = fxRateWithIof(spotFx);
   const tripStart = new Date("2026-11-01T00:00:00Z");
   const tripEnd = new Date("2026-11-20T00:00:00Z");
   const daysLeft = Math.max(0, Math.ceil((tripStart.getTime() - Date.now()) / 86400000));
@@ -73,9 +64,12 @@ function PlannerApp() {
         <div className="max-w-[1280px] mx-auto px-6 py-2 flex items-center justify-between text-[10px] font-mono tracking-[0.25em] uppercase">
           <span>日本 · Nihon · 2026</span>
           <span className="hidden md:inline">Diário de Viagem · Volume III · Outono</span>
-          <button onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1.5 hover:opacity-70">
-            <LogOut className="w-3 h-3" /> Sair
-          </button>
+          <div className="inline-flex items-center gap-2">
+            <ThemeToggle />
+            <button onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1.5 hover:opacity-70">
+              <LogOut className="w-3 h-3" /> Sair
+            </button>
+          </div>
         </div>
       </div>
 
@@ -153,7 +147,9 @@ function PlannerApp() {
 
       <footer className="border-t border-foreground/15 mt-20">
         <div className="max-w-[1280px] mx-auto px-6 py-6 flex justify-between items-center text-[10px] font-mono uppercase tracking-[0.25em] text-muted-foreground flex-wrap gap-2">
-          <span>¥1 = R$ {fxRate.toFixed(4)} · atualizado live</span>
+          <span>
+            ¥1 = R$ {fxRate.toFixed(4)} (spot {spotFx.toFixed(4)} + IOF {(IOF_RATE * 100).toFixed(2)}%)
+          </span>
           <span>EGOCZH — 100% terrestre · Sem trechos aéreos domésticos</span>
         </div>
       </footer>
@@ -355,8 +351,13 @@ function Itinerary({ days, acts, checklist }: { days: TripDay[]; acts: DayActivi
     qc.invalidateQueries({ queryKey: ["acts"] });
   }
   async function deleteAct(id: string) {
-    await supabase.from("day_activities").delete().eq("id", id);
+    const { error } = await supabase.from("day_activities").delete().eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["acts"] });
+    toast.success("Atividade removida");
   }
   async function addAct(dayId: string, title: string) {
     if (!title.trim()) return;
@@ -486,7 +487,12 @@ function Itinerary({ days, acts, checklist }: { days: TripDay[]; acts: DayActivi
                                     {a.cost_jpy ? <span className="ml-2 font-mono text-[11px] text-muted-foreground">{fmtJPY(a.cost_jpy)}</span> : null}
                                     {a.link && <a href={a.link} target="_blank" rel="noreferrer" className="ml-2 text-muted-foreground hover:text-accent inline-block"><ExternalLink className="w-3 h-3 inline" /></a>}
                                   </span>
-                                  <button onClick={() => deleteAct(a.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-accent">
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteAct(a.id)}
+                                    aria-label="Remover atividade"
+                                    className="opacity-0 group-hover:opacity-100 shrink-0 inline-flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
+                                  >
                                     <Trash2 className="w-3 h-3" />
                                   </button>
                                 </li>
@@ -625,90 +631,89 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
     setAdding(null);
     toast.success("Gasto registrado");
   }
+
   async function updatePlanned(id: string, planned: number) {
     await supabase.from("budget_categories").update({ planned_jpy: planned }).eq("id", id);
     qc.invalidateQueries({ queryKey: ["budget"] });
   }
 
-  // Circular progress
-  const radius = 70;
-  const circ = 2 * Math.PI * radius;
-  const offset = circ * (1 - Math.min(pct, 100) / 100);
+  async function deleteExpense(id: string) {
+    await supabase.from("expenses").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["expenses"] });
+    toast.success("Gasto removido");
+  }
 
   return (
     <div className="space-y-10">
       <SectionTitle eyebrow="§ Finanças" title="Orçamento da expedição" sub="Edite valores planejados clicando no número. Registre gastos por categoria." />
 
-      <section className="grid md:grid-cols-12 gap-px bg-foreground/15 border border-foreground/15">
-        <div className="md:col-span-5 bg-background p-8 flex items-center gap-6">
-          <svg width="160" height="160" viewBox="0 0 160 160" className="flex-shrink-0">
-            <circle cx="80" cy="80" r={radius} fill="none" stroke="var(--foreground)" strokeOpacity="0.08" strokeWidth="6" />
-            <circle cx="80" cy="80" r={radius} fill="none"
-              stroke={pct > 90 ? "var(--accent)" : "var(--foreground)"}
-              strokeWidth="6" strokeLinecap="square"
-              strokeDasharray={circ} strokeDashoffset={offset}
-              transform="rotate(-90 80 80)" />
-            <text x="80" y="76" textAnchor="middle" className="font-serif fill-foreground" fontSize="32">{pct}%</text>
-            <text x="80" y="96" textAnchor="middle" className="font-mono fill-muted-foreground uppercase tracking-widest" fontSize="9">utilizado</text>
-          </svg>
-          <div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Resumo geral</div>
-            <div className="font-serif text-3xl tabular leading-tight mt-2">{fmt(totalSpent)}</div>
-            <div className="font-mono text-xs text-muted-foreground tabular mt-1">de {fmt(totalPlan)} planejado</div>
-            <div className="font-mono text-[11px] text-success/80 tabular mt-3">↓ {fmt(remaining)} disponível</div>
+      <section className="grid md:grid-cols-12 gap-4">
+        <div className="md:col-span-5 rounded-3xl border border-foreground/15 bg-background p-8">
+          <div className="flex items-center gap-6">
+            <BudgetSpendDonut budget={budget} expenses={expenses} pct={pct} />
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Resumo geral</div>
+              <div className="font-serif text-3xl tabular leading-tight mt-2">{fmt(totalSpent)}</div>
+              <div className="font-mono text-xs text-muted-foreground tabular mt-1">de {fmt(totalPlan)} planejado</div>
+              <div className="font-mono text-[11px] text-success/80 tabular mt-3">↓ {fmt(remaining)} disponível</div>
+            </div>
           </div>
         </div>
 
-        <div className="md:col-span-4 bg-background p-8">
+        <div className="md:col-span-4 rounded-3xl border border-foreground/15 bg-background p-8">
           <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Câmbio do dia</div>
           <div className="font-serif text-3xl tabular mt-2">¥1 = R${fxRate.toFixed(4)}</div>
-          <div className="font-mono text-xs text-muted-foreground mt-1">Frankfurter API · cache 1h</div>
-          <div className="mt-5 inline-flex border border-foreground/20">
-            <button onClick={() => setUnit("brl")} className={`px-4 py-1.5 font-mono text-xs uppercase tracking-wider ${unit==="brl"?"bg-foreground text-background":"hover:bg-foreground/5"}`}>BRL</button>
-            <button onClick={() => setUnit("jpy")} className={`px-4 py-1.5 font-mono text-xs uppercase tracking-wider ${unit==="jpy"?"bg-foreground text-background":"hover:bg-foreground/5"}`}>JPY</button>
+          <div className="font-mono text-xs text-muted-foreground mt-1">
+            Spot R${(fxRate / (1 + IOF_RATE)).toFixed(4)} + IOF {(IOF_RATE * 100).toFixed(2)}%
+          </div>
+          <div className="font-mono text-[10px] text-muted-foreground/80 mt-0.5">Frankfurter API · cache 1h</div>
+          <div className="mt-5 inline-flex rounded-full border border-foreground/20 overflow-hidden">
+            <button onClick={() => setUnit("brl")} className={`px-4 py-2 font-mono text-xs uppercase tracking-wider ${unit === "brl" ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}>BRL</button>
+            <button onClick={() => setUnit("jpy")} className={`px-4 py-2 font-mono text-xs uppercase tracking-wider ${unit === "jpy" ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}>JPY</button>
           </div>
         </div>
 
-        <div className="md:col-span-3 bg-background p-8">
+        <div className="md:col-span-3 rounded-3xl border border-foreground/15 bg-background p-8">
           <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Por pessoa</div>
           <div className="font-serif text-3xl tabular mt-2">{fmt(totalPlan / 2)}</div>
           <div className="font-mono text-xs text-muted-foreground mt-1">divisão 50/50</div>
         </div>
       </section>
 
-      <section className="space-y-px bg-foreground/15 border border-foreground/15">
+      <section className="space-y-2">
         {budget.map(cat => {
           const catExp = expenses.filter(e => e.category_id === cat.id);
           const spent = catExp.reduce((s, e) => s + Number(e.amount_jpy), 0);
-          const catPct = cat.planned_jpy ? Math.round((spent / Number(cat.planned_jpy)) * 100) : 0;
+          const planned = Number(cat.planned_jpy);
+          const catPct = planned ? Math.round((spent / planned) * 100) : 0;
           return (
-            <div key={cat.id} className="bg-background p-6">
-              <div className="grid md:grid-cols-12 gap-4 items-center">
-                <div className="md:col-span-3">
+            <div key={cat.id} className="rounded-3xl border border-foreground/15 bg-background p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
                   <div className="font-serif text-xl leading-none">{cat.name}</div>
                   <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{catExp.length} registros</div>
                 </div>
-                <div className="md:col-span-6">
-                  <div className="h-1 bg-foreground/10 overflow-hidden">
+                <div className="flex-1">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{catPct}% utilizado</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">{fmt(spent)} de {fmt(planned)}</span>
+                  </div>
+                  <div className="h-1 mt-3 rounded-full bg-foreground/10 overflow-hidden">
                     <div className="h-full transition-all" style={{
                       width: `${Math.min(catPct, 100)}%`,
-                      background: catPct > 100 ? "var(--accent)" : catPct > 80 ? "var(--accent)" : "var(--foreground)"
+                      background: catPct > 80 ? "var(--accent)" : "var(--foreground)"
                     }} />
                   </div>
-                  <div className="flex justify-between mt-2 font-mono text-[10px] text-muted-foreground tabular">
-                    <span>{catPct}% utilizado</span>
-                    <span>{fmt(spent)} de {fmt(Number(cat.planned_jpy))}</span>
-                  </div>
                 </div>
-                <div className="md:col-span-3 flex md:justify-end items-center gap-3">
-                  <div className="font-mono text-xs text-muted-foreground tabular">
-                    <input type="number" defaultValue={cat.planned_jpy}
-                      onBlur={e => { const v = Number(e.target.value); if (v !== cat.planned_jpy) updatePlanned(cat.id, v); }}
-                      className="w-24 bg-transparent border-b border-foreground/15 hover:border-foreground/40 focus:border-foreground outline-none text-right tabular py-1" />
-                    <span className="ml-1">JPY</span>
+                <div className="flex flex-col items-start gap-3 md:items-end">
+                  <div className="flex items-center gap-2">
+                    <input type="number" defaultValue={planned}
+                      onBlur={e => { const v = Number(e.target.value); if (v !== planned) updatePlanned(cat.id, v); }}
+                      className="w-28 bg-transparent border border-foreground/15 px-3 py-2 text-right text-sm tabular outline-none focus:border-foreground" />
+                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">JPY</span>
                   </div>
-                  <button onClick={() => setAdding(adding === cat.id ? null : cat.id)}
-                    className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground inline-flex items-center gap-1 border border-foreground/15 px-2 py-1 hover:border-foreground/40">
+                  <button type="button" onClick={() => setAdding(adding === cat.id ? null : cat.id)}
+                    className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground hover:border-foreground/40 hover:text-foreground">
                     <Plus className="w-3 h-3" /> add
                   </button>
                 </div>
@@ -716,20 +721,141 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
               {adding === cat.id && (
                 <ExpenseForm onCancel={() => setAdding(null)} onSubmit={(amt, note) => addExpense(cat.id, amt, note)} />
               )}
-              {catExp.length > 0 && (
-                <ul className="mt-4 pt-3 border-t border-foreground/10 grid md:grid-cols-2 gap-x-6">
-                  {catExp.slice(0, 6).map(e => (
-                    <li key={e.id} className="flex justify-between text-xs text-muted-foreground py-1 border-b border-foreground/5">
-                      <span>{new Date(e.date).toLocaleDateString("pt-BR")} · {e.note || "—"}</span>
+              <ul className="mt-4 pt-4 border-t border-foreground/10 space-y-2">
+                {catExp.length > 0 ? catExp.slice(0, 6).map(e => (
+                  <li key={e.id} className="flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground py-2 border-b border-foreground/5">
+                    <span>{new Date(e.date).toLocaleDateString("pt-BR")} · {e.note || "—"}</span>
+                    <div className="flex items-center gap-3">
                       <span className="font-mono tabular">{fmt(Number(e.amount_jpy))}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                      <button
+                        type="button"
+                        onClick={() => deleteExpense(e.id)}
+                        aria-label="Remover gasto"
+                        className="inline-flex items-center justify-center w-7 h-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                )) : (
+                  <li className="text-xs text-muted-foreground py-2">Nenhum registro</li>
+                )}
+              </ul>
             </div>
           );
         })}
       </section>
+    </div>
+  );
+}
+
+type SpendTier = "high" | "mid" | "low";
+
+function expenseStrokeClass(tier: SpendTier): string {
+  if (tier === "high") return "stroke-accent";
+  if (tier === "mid") return "stroke-foreground";
+  return "stroke-muted-foreground";
+}
+
+function BudgetSpendDonut({
+  budget,
+  expenses,
+  pct,
+}: {
+  budget: BudgetCategory[];
+  expenses: Expense[];
+  pct: number;
+}) {
+  const radius = 70;
+  const circ = 2 * Math.PI * radius;
+
+  const segments = useMemo(() => {
+    const items = budget
+      .map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        spent: expenses
+          .filter((e) => e.category_id === cat.id)
+          .reduce((s, e) => s + Number(e.amount_jpy), 0),
+      }))
+      .filter((s) => s.spent > 0)
+      .sort((a, b) => b.spent - a.spent);
+
+    const max = items[0]?.spent ?? 1;
+    return items.map((item) => ({
+      ...item,
+      tier: (item.spent >= max * 0.66 ? "high" : item.spent >= max * 0.33 ? "mid" : "low") as SpendTier,
+    }));
+  }, [budget, expenses]);
+
+  const totalSeg = segments.reduce((s, x) => s + x.spent, 0);
+  let cumulative = 0;
+
+  return (
+    <div className="flex-shrink-0">
+      <svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Distribuição de gastos por categoria">
+        <circle
+          cx="80"
+          cy="80"
+          r={radius}
+          fill="none"
+          className="stroke-foreground/10"
+          strokeWidth="6"
+        />
+        {totalSeg > 0 ? (
+          segments.map((seg) => {
+            const arc = (seg.spent / totalSeg) * circ;
+            const rot = (cumulative / totalSeg) * 360 - 90;
+            cumulative += seg.spent;
+            return (
+              <circle
+                key={seg.id}
+                cx="80"
+                cy="80"
+                r={radius}
+                fill="none"
+                className={cn(expenseStrokeClass(seg.tier), "stroke-[6]")}
+                strokeLinecap="butt"
+                strokeDasharray={`${arc} ${circ - arc}`}
+                transform={`rotate(${rot} 80 80)`}
+              >
+                <title>{`${seg.name}: ¥${Math.round(seg.spent).toLocaleString("ja-JP")}`}</title>
+              </circle>
+            );
+          })
+        ) : (
+          <circle
+            cx="80"
+            cy="80"
+            r={radius}
+            fill="none"
+            className="stroke-muted-foreground/30"
+            strokeWidth="6"
+            strokeDasharray={`${circ * 0.02} ${circ}`}
+            transform="rotate(-90 80 80)"
+          />
+        )}
+        <text x="80" y="76" textAnchor="middle" className="font-serif fill-foreground" fontSize="32">
+          {pct}%
+        </text>
+        <text x="80" y="96" textAnchor="middle" className="font-mono fill-muted-foreground uppercase tracking-widest" fontSize="9">
+          utilizado
+        </text>
+      </svg>
+      {segments.length > 0 && (
+        <ul className="mt-2 space-y-0.5 max-w-[160px]">
+          {segments.slice(0, 4).map((seg) => (
+            <li key={seg.id} className="flex items-center gap-1.5 text-[9px] font-mono text-muted-foreground truncate">
+              <span className={cn("w-2 h-2 rounded-full shrink-0", {
+                "bg-accent": seg.tier === "high",
+                "bg-foreground": seg.tier === "mid",
+                "bg-muted-foreground": seg.tier === "low",
+              })} />
+              <span className="truncate">{seg.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

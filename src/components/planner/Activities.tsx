@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { MapPin, Plus, Search, Sparkles, ExternalLink, Calendar, Wallet, Map as MapIcon, Check, X } from "lucide-react";
+import { MapPin, Plus, Search, Sparkles, ExternalLink, Calendar, Wallet, Map as MapIcon, Check, Trash2 } from "lucide-react";
 import type { CatalogItem, TripDay, DayActivity, BudgetCategory, CityGeo } from "./queries";
 
 const fmtJPY = (v: number) => "¥" + Math.round(v).toLocaleString("ja-JP");
@@ -65,8 +65,23 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
   }
 
   async function removeAct(id: string) {
-    await supabase.from("day_activities").delete().eq("id", id);
+    const { error } = await supabase.from("day_activities").delete().eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["acts"] });
+    toast.success("Atividade removida do roteiro");
+  }
+
+  async function removeCatalog(id: string) {
+    const { error } = await supabase.from("activity_catalog").delete().eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["catalog"] });
+    toast.success("Card removido do acervo");
   }
 
   return (
@@ -113,8 +128,13 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
                     {dayActs.map(a => (
                       <div key={a.id} className="group flex items-start gap-1 text-[11px] leading-snug border-l-2 border-accent/40 pl-1.5">
                         <span className={`flex-1 ${a.done ? "line-through text-muted-foreground/60" : ""}`}>{a.title}</span>
-                        <button onClick={() => removeAct(a.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-accent transition-opacity">
-                          <X className="w-3 h-3" />
+                        <button
+                          type="button"
+                          onClick={() => removeAct(a.id)}
+                          aria-label="Remover atividade"
+                          className="opacity-0 group-hover:opacity-100 shrink-0 inline-flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
+                        >
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
@@ -171,7 +191,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-foreground/15 border border-foreground/15">
           {filtered.map(item => (
-            <CatalogCard key={item.id} item={item} days={days} fxRate={fxRate} onAdd={addCatalogToDay} />
+            <CatalogCard key={item.id} item={item} days={days} fxRate={fxRate} onAdd={addCatalogToDay} onDelete={removeCatalog} />
           ))}
         </div>
       </section>
@@ -180,11 +200,12 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
 }
 
 // =============== CATALOG CARD ===============
-function CatalogCard({ item, days, fxRate, onAdd }: {
+function CatalogCard({ item, days, fxRate, onAdd, onDelete }: {
   item: CatalogItem;
   days: TripDay[];
   fxRate: number;
   onAdd: (item: CatalogItem, dayId: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   // Suggest days that match this city
@@ -197,11 +218,21 @@ function CatalogCard({ item, days, fxRate, onAdd }: {
         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
           {item.city} <span className="text-muted-foreground/60 mx-1">·</span> {item.category}
         </div>
-        {item.gmaps_url && (
-          <a href={item.gmaps_url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-accent" title="Abrir no Google Maps">
-            <MapPin className="w-4 h-4" />
-          </a>
-        )}
+        <div className="flex items-center gap-1">
+          {item.gmaps_url && (
+            <a href={item.gmaps_url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-accent p-1" title="Abrir no Google Maps">
+              <MapPin className="w-4 h-4" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => onDelete(item.id)}
+            aria-label="Remover do acervo"
+            className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       <h3 className="font-serif text-xl leading-tight">{item.title}</h3>
       {item.description && <p className="text-sm text-muted-foreground leading-relaxed flex-1">{item.description}</p>}

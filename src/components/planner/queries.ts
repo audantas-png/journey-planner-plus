@@ -54,7 +54,13 @@ export const fetchGeo = async () => {
   if (error) throw error; return data as CityGeo[];
 };
 
-const FX_KEY = "jpy_brl_rate";
+/** IOF fixo sobre operações internacionais com cartão (Brasil). */
+export const IOF_RATE = 0.0638;
+
+const FX_KEY = "jpy_brl_spot";
+const FX_FALLBACK_SPOT = 0.038;
+
+/** Cotação spot JPY→BRL (sem IOF). */
 export async function fetchFxRate(): Promise<number> {
   try {
     const cached = typeof localStorage !== "undefined" ? localStorage.getItem(FX_KEY) : null;
@@ -64,11 +70,22 @@ export async function fetchFxRate(): Promise<number> {
     }
     const r = await fetch("https://api.frankfurter.app/latest?from=JPY&to=BRL");
     const j = await r.json();
-    const rate = j.rates?.BRL ?? 0.038;
+    const rate = j.rates?.BRL ?? FX_FALLBACK_SPOT;
     if (typeof localStorage !== "undefined")
       localStorage.setItem(FX_KEY, JSON.stringify({ rate, ts: Date.now() }));
     return rate;
-  } catch { return 0.038; }
+  } catch {
+    return FX_FALLBACK_SPOT;
+  }
+}
+
+/** Taxa efetiva para converter gastos da viagem: spot + IOF. */
+export function fxRateWithIof(spotRate: number): number {
+  return spotRate * (1 + IOF_RATE);
+}
+
+export function jpyToBrl(jpy: number, fxRate: number): number {
+  return jpy * fxRate;
 }
 
 export const PHASES: Record<string, { label: string; color: string }> = {

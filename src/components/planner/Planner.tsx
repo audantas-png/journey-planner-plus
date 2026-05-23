@@ -7,7 +7,7 @@ import { Activities } from "./Activities";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
   fetchChecklist, fetchGeo, fetchFxRate, PHASES,
-  type TripDay, type DayActivity, type CatalogItem, type BudgetCategory, type Expense, type ChecklistItem,
+  type TripDay, type DayActivity, type BudgetCategory, type Expense, type ChecklistItem,
 } from "./queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

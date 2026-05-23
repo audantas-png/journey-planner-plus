@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthScreen } from "./Auth";
 import { TripMap } from "./Map";
+import { Activities } from "./Activities";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
   fetchChecklist, fetchGeo, fetchFxRate, PHASES,
@@ -137,7 +138,16 @@ function PlannerApp() {
         {tab === "overview" && <Overview days={days.data ?? []} acts={acts.data ?? []} budget={budget.data ?? []} expenses={expenses.data ?? []} daysLeft={daysLeft} fxRate={fxRate} tripStart={tripStart} tripEnd={tripEnd} />}
         {tab === "itinerary" && <Itinerary days={days.data ?? []} acts={acts.data ?? []} checklist={checklist.data ?? []} />}
         {tab === "map" && <MapTab days={days.data ?? []} geo={geo.data ?? []} />}
-        {tab === "activities" && <Activities catalog={catalog.data ?? []} days={days.data ?? []} fxRate={fxRate} />}
+        {tab === "activities" && (
+          <Activities
+            catalog={catalog.data ?? []}
+            days={days.data ?? []}
+            acts={acts.data ?? []}
+            budget={budget.data ?? []}
+            geo={geo.data ?? []}
+            fxRate={fxRate}
+          />
+        )}
         {tab === "budget" && <Budget budget={budget.data ?? []} expenses={expenses.data ?? []} fxRate={fxRate} />}
       </main>
 

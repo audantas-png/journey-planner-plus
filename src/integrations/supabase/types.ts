@@ -14,7 +14,249 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_catalog: {
+        Row: {
+          avg_cost_jpy: number | null
+          category: string
+          city: string
+          created_at: string
+          description: string | null
+          duration_minutes: number | null
+          gmaps_url: string | null
+          id: string
+          tip: string | null
+          title: string
+        }
+        Insert: {
+          avg_cost_jpy?: number | null
+          category?: string
+          city: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          gmaps_url?: string | null
+          id?: string
+          tip?: string | null
+          title: string
+        }
+        Update: {
+          avg_cost_jpy?: number | null
+          category?: string
+          city?: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          gmaps_url?: string | null
+          id?: string
+          tip?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
+      budget_categories: {
+        Row: {
+          icon: string | null
+          id: string
+          name: string
+          planned_jpy: number
+          position: number
+        }
+        Insert: {
+          icon?: string | null
+          id?: string
+          name: string
+          planned_jpy?: number
+          position?: number
+        }
+        Update: {
+          icon?: string | null
+          id?: string
+          name?: string
+          planned_jpy?: number
+          position?: number
+        }
+        Relationships: []
+      }
+      checklist_items: {
+        Row: {
+          created_at: string
+          day_id: string | null
+          done: boolean
+          id: string
+          position: number
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          day_id?: string | null
+          done?: boolean
+          id?: string
+          position?: number
+          text: string
+        }
+        Update: {
+          created_at?: string
+          day_id?: string | null
+          done?: boolean
+          id?: string
+          position?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_items_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "trip_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      city_geo: {
+        Row: {
+          city: string
+          lat: number
+          lng: number
+          region: string | null
+        }
+        Insert: {
+          city: string
+          lat: number
+          lng: number
+          region?: string | null
+        }
+        Update: {
+          city?: string
+          lat?: number
+          lng?: number
+          region?: string | null
+        }
+        Relationships: []
+      }
+      day_activities: {
+        Row: {
+          cost_jpy: number | null
+          created_at: string
+          day_id: string
+          description: string | null
+          done: boolean
+          id: string
+          link: string | null
+          position: number
+          time_label: string | null
+          title: string
+        }
+        Insert: {
+          cost_jpy?: number | null
+          created_at?: string
+          day_id: string
+          description?: string | null
+          done?: boolean
+          id?: string
+          link?: string | null
+          position?: number
+          time_label?: string | null
+          title: string
+        }
+        Update: {
+          cost_jpy?: number | null
+          created_at?: string
+          day_id?: string
+          description?: string | null
+          done?: boolean
+          id?: string
+          link?: string | null
+          position?: number
+          time_label?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_activities_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "trip_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount_jpy: number
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          note: string | null
+        }
+        Insert: {
+          amount_jpy: number
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          amount_jpy?: number
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_days: {
+        Row: {
+          city: string
+          created_at: string
+          date: string
+          day_number: number
+          id: string
+          notes: string | null
+          phase: string
+          position: number
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          city: string
+          created_at?: string
+          date: string
+          day_number: number
+          id?: string
+          notes?: string | null
+          phase?: string
+          position: number
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string
+          created_at?: string
+          date?: string
+          day_number?: number
+          id?: string
+          notes?: string | null
+          phase?: string
+          position?: number
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

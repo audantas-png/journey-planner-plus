@@ -27,9 +27,6 @@ export type CityGeo = { city: string; lat: number; lng: number; region: string |
 
 export const fetchDays = async () => {
   const { data, error } = await supabase.from("trip_days").select("*").order("position");
-  // #region agent log
-  fetch('http://127.0.0.1:7941/ingest/7dc37b9f-23a0-4121-a8f6-0bf7a5f7ef54',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'69c5cc'},body:JSON.stringify({sessionId:'69c5cc',location:'queries.ts:fetchDays',message:'fetchDays result',data:{ok:!error,errorCode:error?.code??null,errorMsg:error?.message??null,rowCount:data?.length??0},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
   if (error) throw error; return data as TripDay[];
 };
 export const fetchActivities = async () => {

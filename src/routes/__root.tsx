@@ -39,11 +39,6 @@ function NotFoundComponent() {
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
-  // #region agent log
-  if (typeof fetch !== 'undefined') {
-    fetch('http://127.0.0.1:7941/ingest/7dc37b9f-23a0-4121-a8f6-0bf7a5f7ef54',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'69c5cc'},body:JSON.stringify({sessionId:'69c5cc',location:'__root.tsx:ErrorComponent',message:'route error boundary',data:{errorMsg:error?.message??String(error),stack:error?.stack?.slice(0,200)??null},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
-  }
-  // #endregion
   const router = useRouter();
 
   return (
@@ -133,10 +128,7 @@ function AuthSync() {
   const router = useRouter();
   const queryClient = useQueryClient();
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7941/ingest/7dc37b9f-23a0-4121-a8f6-0bf7a5f7ef54',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'69c5cc'},body:JSON.stringify({sessionId:'69c5cc',location:'__root.tsx:AuthSync',message:'AuthSync invalidate',data:{event},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       router.invalidate();
       queryClient.invalidateQueries();
     });

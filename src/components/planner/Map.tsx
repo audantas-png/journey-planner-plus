@@ -4,6 +4,15 @@ import type { TripDay, CityGeo } from "./queries";
 export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
   const [Leaflet, setLeaflet] = useState<any>(null);
   useEffect(() => {
+    // Inject Leaflet CSS once (avoids Tailwind v4 @import ordering issues)
+    const cssId = "leaflet-css";
+    if (!document.getElementById(cssId)) {
+      const link = document.createElement("link");
+      link.id = cssId;
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
     Promise.all([import("react-leaflet"), import("leaflet")]).then(([rl, L]) => {
       // @ts-ignore
       delete L.default.Icon.Default.prototype._getIconUrl;
@@ -13,7 +22,7 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
       setLeaflet({ ...rl, L: L.default });
-    });
+    }).catch((err) => console.error("[Map] load failed", err));
   }, []);
 
   if (!Leaflet) return <div className="h-[600px] flex items-center justify-center text-muted-foreground text-sm">Carregando mapa…</div>;

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { suggestActivities } from "@/lib/planner.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -9,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { MapPin, Plus, Search, Sparkles, ExternalLink, Calendar, Wallet, Map as MapIcon, Check, Trash2 } from "lucide-react";
+import { MapPin, Plus, Search, Sparkles, ExternalLink, Calendar, Wallet, Map as MapIcon, Check, Trash2, Wand2, Loader2, CalendarCheck } from "lucide-react";
 import type { CatalogItem, TripDay, DayActivity, BudgetCategory, CityGeo } from "./queries";
 
 const fmtJPY = (v: number) => "¥" + Math.round(v).toLocaleString("ja-JP");
@@ -31,6 +33,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
   const [filterCat, setFilterCat] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [hoverDay, setHoverDay] = useState<string | null>(null);
+  const [aiOpenDay, setAiOpenDay] = useState<string | null>(null);
 
   const cities = useMemo(() => Array.from(new Set(catalog.map(c => c.city))).sort(), [catalog]);
   const cats = useMemo(() => Array.from(new Set(catalog.map(c => c.category))).sort(), [catalog]);
@@ -86,6 +89,21 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
 
   return (
     <div className="space-y-10">
+      {/* ====== AI SUGGESTION PANEL ====== */}
+      {aiOpenDay && (() => {
+        const d = days.find(x => x.id === aiOpenDay);
+        if (!d) return null;
+        return (
+          <AiSuggestPanel
+            day={d}
+            existingTitles={(actsByDay.get(d.id) ?? []).map(a => a.title)}
+            budget={budget}
+            fxRate={fxRate}
+            onClose={() => setAiOpenDay(null)}
+          />
+        );
+      })()}
+
       {/* ====== INTERACTIVE TIMELINE ====== */}
       <section>
         <div className="flex items-end justify-between gap-6 flex-wrap border-b border-foreground/15 pb-3 mb-5">
@@ -94,7 +112,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
             <h2 className="font-serif text-3xl mt-1 leading-none">20 dias, vista geral</h2>
           </div>
           <p className="text-xs text-muted-foreground max-w-sm leading-relaxed">
-            Cada coluna é um dia. Clique numa atividade do catálogo abaixo para soltá-la no dia desejado.
+            Cada coluna é um dia. Clique no ícone <Wand2 className="w-3 h-3 inline -mt-0.5 text-accent" /> para receber sugestões de IA com eventos reais da data.
           </p>
         </div>
 
@@ -139,8 +157,18 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
                       </div>
                     ))}
                   </div>
-                  <div className="mt-auto flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70 pt-1">
+                  <div className="mt-auto flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-muted-foreground pt-1">
                     <span>{dayActs.length} ítem{dayActs.length !== 1 ? "s" : ""}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAiOpenDay(d.id)}
+                      aria-label="Sugestões de IA para este dia"
+                      title="Sugestões de IA"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-accent hover:bg-accent/10 transition-colors"
+                    >
+                      <Wand2 className="w-3 h-3" />
+                      <span>IA</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -584,5 +612,159 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1.5">{label}</div>
       {children}
     </div>
+  );
+}
+
+// =============== AI SUGGEST PANEL ===============
+type AiSuggestion = {
+  title: string;
+  description: string;
+  category: string;
+  avg_cost_jpy: number | null;
+  duration_minutes: number | null;
+  tip: string | null;
+  date_specific: boolean;
+};
+
+function AiSuggestPanel({
+  day, existingTitles, budget, fxRate, onClose,
+}: {
+  day: TripDay;
+  existingTitles: string[];
+  budget: BudgetCategory[];
+  fxRate: number;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const callSuggest = useServerFn(suggestActivities);
+  const date = new Date(day.date + "T00:00:00Z");
+
+  const q = useQuery({
+    queryKey: ["ai-suggest", day.id, existingTitles.join("|")],
+    queryFn: () => callSuggest({ data: { city: day.city, date: day.date, existingTitles } }),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function addToDay(s: AiSuggestion, alsoCatalog: boolean, alsoExpense: boolean) {
+    setBusy(s.title);
+    try {
+      const { error } = await supabase.from("day_activities").insert({
+        day_id: day.id, title: s.title, description: s.description, cost_jpy: s.avg_cost_jpy,
+      });
+      if (error) throw error;
+      if (alsoCatalog) {
+        await supabase.from("activity_catalog").insert({
+          city: day.city, title: s.title, description: s.description, category: s.category || "geral",
+          duration_minutes: s.duration_minutes, avg_cost_jpy: s.avg_cost_jpy, tip: s.tip,
+        });
+      }
+      if (alsoExpense && s.avg_cost_jpy && budget[0]) {
+        const guess = budget.find(b => /atra|ingresso|alimenta/i.test(b.name)) ?? budget[0];
+        await supabase.from("expenses").insert({
+          category_id: guess.id, amount_jpy: s.avg_cost_jpy, note: `Atividade IA: ${s.title}`,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["acts"] });
+      if (alsoCatalog) qc.invalidateQueries({ queryKey: ["catalog"] });
+      if (alsoExpense) qc.invalidateQueries({ queryKey: ["expenses"] });
+      toast.success(`"${s.title}" → D${day.day_number}`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Erro ao adicionar");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="border border-accent/40 bg-accent/[0.04] relative">
+      <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-accent/20">
+        <div>
+          <div className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-accent">
+            <Wand2 className="w-3 h-3" /> Curadoria IA · D{String(day.day_number).padStart(2, "0")}
+          </div>
+          <h3 className="font-serif text-2xl mt-1 leading-tight">
+            {day.city} <span className="text-muted-foreground text-base">·</span>{" "}
+            <span className="text-base text-muted-foreground">
+              {date.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}
+            </span>
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Sugestões consideram eventos sazonais reais da data (festivais, koyo, iluminações).
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => q.refetch()}
+            disabled={q.isFetching}
+            className="text-[10px] font-mono uppercase tracking-widest border border-foreground/20 px-3 py-1.5 hover:bg-foreground/5 disabled:opacity-50"
+          >
+            {q.isFetching ? "Gerando…" : "Regerar"}
+          </button>
+          <button onClick={onClose} aria-label="Fechar" className="text-muted-foreground hover:text-foreground text-2xl leading-none px-2">×</button>
+        </div>
+      </header>
+
+      <div className="p-5">
+        {q.isLoading && (
+          <div className="flex items-center gap-3 text-sm text-muted-foreground py-8 justify-center">
+            <Loader2 className="w-4 h-4 animate-spin" /> Consultando a IA…
+          </div>
+        )}
+        {q.data?.error && (
+          <div className="text-sm text-destructive py-4">{q.data.error}</div>
+        )}
+        {q.data?.suggestions && q.data.suggestions.length > 0 && (
+          <div className="grid md:grid-cols-2 gap-3">
+            {q.data.suggestions.map((s, i) => (
+              <article key={i} className="border border-foreground/15 bg-background p-4 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
+                    {s.category}
+                    {s.date_specific && (
+                      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 bg-accent text-accent-foreground rounded-sm">
+                        <CalendarCheck className="w-2.5 h-2.5" /> evento da data
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-mono text-[10px] text-muted-foreground tabular">
+                    {s.avg_cost_jpy ? fmtJPY(s.avg_cost_jpy) : "grátis"}
+                  </div>
+                </div>
+                <h4 className="font-serif text-lg leading-tight">{s.title}</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">{s.description}</p>
+                {s.tip && (
+                  <p className="text-xs italic text-foreground/75 border-l-2 border-accent/40 pl-2">
+                    <span className="not-italic font-mono text-[9px] uppercase tracking-widest text-accent mr-1">dica</span>
+                    {s.tip}
+                  </p>
+                )}
+                <div className="flex items-center justify-between gap-2 mt-1 pt-2 border-t border-foreground/10 font-mono text-[10px] text-muted-foreground tabular">
+                  <span>
+                    {s.duration_minutes ? `${Math.round(s.duration_minutes/60*10)/10}h` : "—"}
+                    {s.avg_cost_jpy ? ` · ${fmtBRL(s.avg_cost_jpy * fxRate)}` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => addToDay(s, true, false)}
+                    disabled={busy === s.title}
+                    className="inline-flex items-center gap-1.5 bg-foreground text-background px-2.5 py-1.5 uppercase tracking-wider hover:bg-foreground/85 disabled:opacity-50"
+                  >
+                    {busy === s.title ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                    Adicionar
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        {q.data?.suggestions?.length === 0 && !q.isLoading && (
+          <div className="text-sm text-muted-foreground py-8 text-center">Sem sugestões. Tente regerar.</div>
+        )}
+      </div>
+    </section>
   );
 }

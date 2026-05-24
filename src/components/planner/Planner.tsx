@@ -910,3 +910,40 @@ function ExpenseForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (
     </form>
   );
 }
+
+function NewCategoryForm({ onAdd }: { onAdd: (name: string, planned: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [planned, setPlanned] = useState("");
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-full border border-foreground/20 px-4 py-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground hover:border-foreground/50 hover:text-foreground transition-colors"
+      >
+        <Plus className="w-3 h-3" /> Nova categoria
+      </button>
+    );
+  }
+  return (
+    <form
+      onSubmit={e => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        onAdd(name.trim(), Number(planned) || 0);
+        setName(""); setPlanned(""); setOpen(false);
+      }}
+      className="flex items-center gap-2"
+    >
+      <Input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da categoria"
+        className="w-48 rounded-none border-foreground/20 bg-transparent h-8 text-sm" required autoFocus />
+      <Input type="number" value={planned} onChange={e => setPlanned(e.target.value)} placeholder="¥ planejado"
+        className="w-32 rounded-none border-foreground/20 bg-transparent h-8 text-sm tabular" />
+      <Button type="submit" size="sm" className="rounded-none bg-foreground text-background h-8 font-mono text-[10px] uppercase tracking-widest">
+        Criar
+      </Button>
+      <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none px-1">×</button>
+    </form>
+  );
+}

@@ -114,43 +114,44 @@
 }
 
 .dark {
-  --paper: oklch(0.16 0.012 60);
-  --ink: oklch(0.94 0.005 85);
-  --stone: oklch(0.62 0.01 60);
-  --background: oklch(0.14 0.012 60);
-  --foreground: oklch(0.94 0.005 85);
-  --card: oklch(0.18 0.012 60);
-  --card-foreground: oklch(0.94 0.005 85);
-  --popover: oklch(0.18 0.012 60);
-  --popover-foreground: oklch(0.94 0.005 85);
-  --primary: oklch(0.94 0.005 85);
-  --primary-foreground: oklch(0.14 0.012 60);
-  --secondary: oklch(0.22 0.012 60);
-  --secondary-foreground: oklch(0.94 0.005 85);
-  --muted: oklch(0.24 0.01 60);
-  --muted-foreground: oklch(0.62 0.01 60);
-  --accent: oklch(0.58 0.16 27);
+  /* Editorial dark: ink-on-paper invertido com calor sutil para reduzir fadiga */
+  --paper: oklch(0.165 0.014 55);
+  --ink: oklch(0.965 0.006 85);
+  --stone: oklch(0.74 0.012 60);
+  --background: oklch(0.155 0.014 55);
+  --foreground: oklch(0.965 0.006 85);
+  --card: oklch(0.20 0.014 55);
+  --card-foreground: oklch(0.965 0.006 85);
+  --popover: oklch(0.21 0.014 55);
+  --popover-foreground: oklch(0.965 0.006 85);
+  --primary: oklch(0.965 0.006 85);
+  --primary-foreground: oklch(0.155 0.014 55);
+  --secondary: oklch(0.24 0.014 55);
+  --secondary-foreground: oklch(0.965 0.006 85);
+  --muted: oklch(0.26 0.012 55);
+  --muted-foreground: oklch(0.76 0.014 60);
+  --accent: oklch(0.72 0.17 30);
   --accent-foreground: oklch(0.14 0.012 60);
-  --destructive: oklch(0.55 0.18 27);
-  --destructive-foreground: oklch(0.94 0.005 85);
-  --success: oklch(0.55 0.09 145);
+  --destructive: oklch(0.68 0.19 27);
+  --destructive-foreground: oklch(0.98 0.006 85);
+  --success: oklch(0.72 0.13 150);
   --success-foreground: oklch(0.14 0.012 60);
-  --border: oklch(0.94 0.005 85 / 12%);
-  --input: oklch(0.94 0.005 85 / 16%);
-  --ring: oklch(0.58 0.16 27);
+  --border: oklch(0.965 0.006 85 / 22%);
+  --input: oklch(0.965 0.006 85 / 26%);
+  --ring: oklch(0.72 0.17 30);
   --chart-1: oklch(0.58 0.16 27);
   --chart-2: oklch(0.72 0.08 85);
   --chart-3: oklch(0.55 0.09 145);
   --chart-4: oklch(0.65 0.12 300);
   --chart-5: oklch(0.5 0.06 60);
-  --sidebar: oklch(0.16 0.012 60);
-  --sidebar-foreground: oklch(0.94 0.005 85);
-  --sidebar-primary: oklch(0.58 0.16 27);
+  --sidebar: oklch(0.18 0.014 55);
+  --sidebar-foreground: oklch(0.965 0.006 85);
+  --sidebar-primary: oklch(0.72 0.17 30);
   --sidebar-primary-foreground: oklch(0.14 0.012 60);
-  --sidebar-accent: oklch(0.22 0.012 60);
-  --sidebar-accent-foreground: oklch(0.94 0.005 85);
-  --sidebar-border: oklch(0.94 0.005 85 / 12%);
-  --sidebar-ring: oklch(0.58 0.16 27);
+  --sidebar-accent: oklch(0.24 0.014 55);
+  --sidebar-accent-foreground: oklch(0.965 0.006 85);
+  --sidebar-border: oklch(0.965 0.006 85 / 22%);
+  --sidebar-ring: oklch(0.72 0.17 30);
 }
 
 @layer base {
@@ -175,5 +176,27 @@
   .font-mono, .tabular {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Dark mode: leitura mais confortável em textos pequenos / mono uppercase */
+  .dark .font-mono {
+    font-weight: 500;
+  }
+  .dark body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Leaflet tiles ficam queimados no dark — aplicar leve inversão de luminosidade */
+  .dark .leaflet-tile-pane {
+    filter: brightness(0.7) invert(1) contrast(0.95) hue-rotate(200deg) saturate(0.5);
+  }
+  .dark .leaflet-container {
+    background: var(--background) !important;
+  }
+  .dark .leaflet-popup-content-wrapper,
+  .dark .leaflet-popup-tip {
+    background: var(--card) !important;
+    color: var(--card-foreground) !important;
   }
 }

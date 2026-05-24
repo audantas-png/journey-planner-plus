@@ -643,6 +643,26 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
     toast.success("Gasto removido");
   }
 
+  async function deleteCategory(id: string, name: string) {
+    if (!confirm(`Remover categoria "${name}" e todos os seus registros?`)) return;
+    await supabase.from("expenses").delete().eq("category_id", id);
+    const { error } = await supabase.from("budget_categories").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ["budget"] });
+    qc.invalidateQueries({ queryKey: ["expenses"] });
+    toast.success("Categoria removida");
+  }
+
+  async function addCategory(name: string, planned: number) {
+    const nextPos = (budget.reduce((m, b) => Math.max(m, b.position), 0) ?? 0) + 1;
+    const { error } = await supabase.from("budget_categories").insert({
+      name: name.trim(), planned_jpy: planned, position: nextPos,
+    });
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ["budget"] });
+    toast.success("Categoria adicionada");
+  }
+
   return (
     <div className="space-y-10">
       <SectionTitle eyebrow="§ Finanças" title="Orçamento da expedição" sub="Edite valores planejados clicando no número. Registre gastos por categoria." />
@@ -680,6 +700,11 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
         </div>
       </section>
 
+      <div className="flex items-center justify-between border-b border-foreground/15 pb-3">
+        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">— Categorias</div>
+        <NewCategoryForm onAdd={addCategory} />
+      </div>
+
       <section className="space-y-2">
         {budget.map(cat => {
           const catExp = expenses.filter(e => e.category_id === cat.id);
@@ -690,7 +715,17 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
             <div key={cat.id} className="rounded-3xl border border-foreground/15 bg-background p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="font-serif text-xl leading-none">{cat.name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-serif text-xl leading-none">{cat.name}</div>
+                    <button
+                      type="button"
+                      onClick={() => deleteCategory(cat.id, cat.name)}
+                      aria-label="Remover categoria"
+                      className="inline-flex items-center justify-center w-7 h-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{catExp.length} registros</div>
                 </div>
                 <div className="flex-1">

@@ -643,6 +643,26 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
     toast.success("Gasto removido");
   }
 
+  async function deleteCategory(id: string, name: string) {
+    if (!confirm(`Remover categoria "${name}" e todos os seus registros?`)) return;
+    await supabase.from("expenses").delete().eq("category_id", id);
+    const { error } = await supabase.from("budget_categories").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ["budget"] });
+    qc.invalidateQueries({ queryKey: ["expenses"] });
+    toast.success("Categoria removida");
+  }
+
+  async function addCategory(name: string, planned: number) {
+    const nextPos = (budget.reduce((m, b) => Math.max(m, b.position), 0) ?? 0) + 1;
+    const { error } = await supabase.from("budget_categories").insert({
+      name: name.trim(), planned_jpy: planned, position: nextPos,
+    });
+    if (error) { toast.error(error.message); return; }
+    qc.invalidateQueries({ queryKey: ["budget"] });
+    toast.success("Categoria adicionada");
+  }
+
   return (
     <div className="space-y-10">
       <SectionTitle eyebrow="§ Finanças" title="Orçamento da expedição" sub="Edite valores planejados clicando no número. Registre gastos por categoria." />
@@ -680,6 +700,11 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
         </div>
       </section>
 
+      <div className="flex items-center justify-between border-b border-foreground/15 pb-3">
+        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">— Categorias</div>
+        <NewCategoryForm onAdd={addCategory} />
+      </div>
+
       <section className="space-y-2">
         {budget.map(cat => {
           const catExp = expenses.filter(e => e.category_id === cat.id);
@@ -690,7 +715,17 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
             <div key={cat.id} className="rounded-3xl border border-foreground/15 bg-background p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="font-serif text-xl leading-none">{cat.name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-serif text-xl leading-none">{cat.name}</div>
+                    <button
+                      type="button"
+                      onClick={() => deleteCategory(cat.id, cat.name)}
+                      aria-label="Remover categoria"
+                      className="inline-flex items-center justify-center w-7 h-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{catExp.length} registros</div>
                 </div>
                 <div className="flex-1">
@@ -872,6 +907,43 @@ function ExpenseForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (
         className="flex-1 rounded-none border-foreground/20 bg-transparent h-8 text-sm" />
       <Button type="submit" size="sm" className="rounded-none bg-foreground text-background h-8 font-mono text-[10px] uppercase tracking-widest">Registrar</Button>
       <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground text-lg leading-none px-1">×</button>
+    </form>
+  );
+}
+
+function NewCategoryForm({ onAdd }: { onAdd: (name: string, planned: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [planned, setPlanned] = useState("");
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-full border border-foreground/20 px-4 py-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground hover:border-foreground/50 hover:text-foreground transition-colors"
+      >
+        <Plus className="w-3 h-3" /> Nova categoria
+      </button>
+    );
+  }
+  return (
+    <form
+      onSubmit={e => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        onAdd(name.trim(), Number(planned) || 0);
+        setName(""); setPlanned(""); setOpen(false);
+      }}
+      className="flex items-center gap-2"
+    >
+      <Input value={name} onChange={e => setName(e.target.value)} placeholder="Nome da categoria"
+        className="w-48 rounded-none border-foreground/20 bg-transparent h-8 text-sm" required autoFocus />
+      <Input type="number" value={planned} onChange={e => setPlanned(e.target.value)} placeholder="¥ planejado"
+        className="w-32 rounded-none border-foreground/20 bg-transparent h-8 text-sm tabular" />
+      <Button type="submit" size="sm" className="rounded-none bg-foreground text-background h-8 font-mono text-[10px] uppercase tracking-widest">
+        Criar
+      </Button>
+      <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none px-1">×</button>
     </form>
   );
 }

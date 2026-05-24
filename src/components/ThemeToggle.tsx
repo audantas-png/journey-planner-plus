@@ -5,11 +5,12 @@ import { cn } from "@/lib/utils";
 const STORAGE_KEY = "japan-planner-theme";
 
 function getInitialDark(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined") return true;
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "dark") return true;
   if (stored === "light") return false;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  // Default ON: dark mode é o padrão da aplicação
+  return true;
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
@@ -36,4 +37,4 @@ export function ThemeToggle({ className }: { className?: string }) {
 }
 
 /** Evita flash de tema errado no primeiro paint (SSR). */
-export const themeInitScript = `(function(){try{var k="${STORAGE_KEY}";var s=localStorage.getItem(k);var d=s==="dark"||(!s&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
+export const themeInitScript = `(function(){try{var k="${STORAGE_KEY}";var s=localStorage.getItem(k);var d=s==="dark"||!s;document.documentElement.classList.toggle("dark",d);}catch(e){document.documentElement.classList.add("dark");}})();`;

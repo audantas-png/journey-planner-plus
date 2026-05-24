@@ -27,6 +27,12 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
 
   if (!Leaflet) return <div className="h-[600px] flex items-center justify-center text-muted-foreground text-sm">Carregando mapa…</div>;
   const { MapContainer, TileLayer, Marker, Popup, Polyline } = Leaflet;
+  const L = Leaflet.L;
+  // Bounding box do arquipélago japonês (SW → NE)
+  const JAPAN_BOUNDS = L.latLngBounds(
+    L.latLng(24.0, 122.0),  // sudoeste (Okinawa / Yonaguni)
+    L.latLng(45.7, 146.0),  // nordeste (Hokkaido / Nemuro)
+  );
 
   const geoMap = new Map(geo.map(g => [g.city, g]));
   const points = days
@@ -41,10 +47,21 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
 
   return (
     <div className="h-[600px] border border-foreground/15">
-      <MapContainer center={[36.5, 138]} zoom={5} style={{ height: "100%", width: "100%" }}>
+      <MapContainer
+        center={[36.5, 138]}
+        zoom={5}
+        minZoom={5}
+        maxZoom={10}
+        maxBounds={JAPAN_BOUNDS}
+        maxBoundsViscosity={1.0}
+        worldCopyJump={false}
+        style={{ height: "100%", width: "100%", background: "var(--background)" }}
+      >
         <TileLayer
           attribution='&copy; OpenStreetMap'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          bounds={JAPAN_BOUNDS}
+          noWrap={true}
         />
         <Polyline positions={path} pathOptions={{ color: "#9B2C2C", weight: 2, dashArray: "6 4" }} />
         {Array.from(new Set(points.map(p => p.g.city))).map(city => {

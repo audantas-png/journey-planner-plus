@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { suggestActivities } from "@/lib/planner.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -9,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { MapPin, Plus, Search, Sparkles, ExternalLink, Calendar, Wallet, Map as MapIcon, Check, Trash2 } from "lucide-react";
+import { MapPin, Plus, Search, Sparkles, ExternalLink, Calendar, Wallet, Map as MapIcon, Check, Trash2, Wand2, Loader2, CalendarCheck } from "lucide-react";
 import type { CatalogItem, TripDay, DayActivity, BudgetCategory, CityGeo } from "./queries";
 
 const fmtJPY = (v: number) => "¥" + Math.round(v).toLocaleString("ja-JP");
@@ -31,6 +33,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
   const [filterCat, setFilterCat] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [hoverDay, setHoverDay] = useState<string | null>(null);
+  const [aiOpenDay, setAiOpenDay] = useState<string | null>(null);
 
   const cities = useMemo(() => Array.from(new Set(catalog.map(c => c.city))).sort(), [catalog]);
   const cats = useMemo(() => Array.from(new Set(catalog.map(c => c.category))).sort(), [catalog]);
@@ -86,6 +89,21 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
 
   return (
     <div className="space-y-10">
+      {/* ====== AI SUGGESTION PANEL ====== */}
+      {aiOpenDay && (() => {
+        const d = days.find(x => x.id === aiOpenDay);
+        if (!d) return null;
+        return (
+          <AiSuggestPanel
+            day={d}
+            existingTitles={(actsByDay.get(d.id) ?? []).map(a => a.title)}
+            budget={budget}
+            fxRate={fxRate}
+            onClose={() => setAiOpenDay(null)}
+          />
+        );
+      })()}
+
       {/* ====== INTERACTIVE TIMELINE ====== */}
       <section>
         <div className="flex items-end justify-between gap-6 flex-wrap border-b border-foreground/15 pb-3 mb-5">
@@ -94,7 +112,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
             <h2 className="font-serif text-3xl mt-1 leading-none">20 dias, vista geral</h2>
           </div>
           <p className="text-xs text-muted-foreground max-w-sm leading-relaxed">
-            Cada coluna é um dia. Clique numa atividade do catálogo abaixo para soltá-la no dia desejado.
+            Cada coluna é um dia. Clique no ícone <Wand2 className="w-3 h-3 inline -mt-0.5 text-accent" /> para receber sugestões de IA com eventos reais da data.
           </p>
         </div>
 
@@ -139,8 +157,18 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
                       </div>
                     ))}
                   </div>
-                  <div className="mt-auto flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70 pt-1">
+                  <div className="mt-auto flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-muted-foreground pt-1">
                     <span>{dayActs.length} ítem{dayActs.length !== 1 ? "s" : ""}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAiOpenDay(d.id)}
+                      aria-label="Sugestões de IA para este dia"
+                      title="Sugestões de IA"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-accent hover:bg-accent/10 transition-colors"
+                    >
+                      <Wand2 className="w-3 h-3" />
+                      <span>IA</span>
+                    </button>
                   </div>
                 </div>
               );

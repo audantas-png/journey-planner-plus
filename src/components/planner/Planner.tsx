@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { analyzeItinerary } from "@/lib/planner.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { TripMap } from "./Map";
 import { Activities } from "./Activities";
@@ -17,6 +19,7 @@ import { toast } from "sonner";
 import {
   ChevronDown, Plus, Check, MapPin, ExternalLink, LogOut, Trash2,
   Compass, CalendarDays, Map as MapIcon, Sparkles, Wallet, Train,
+  AlertTriangle, ShieldAlert, Info, Loader2, Wand2,
 } from "lucide-react";
 
 const fmtBRL = (v: number) => "R$ " + Math.round(v).toLocaleString("pt-BR");
@@ -308,7 +311,129 @@ function Overview({ days, acts, budget, expenses, daysLeft, fxRate, tripStart, t
           ))}
         </div>
       </section>
+
+      {/* Sanity Check via IA */}
+      <SanityCheck days={days} />
     </div>
+  );
+}
+
+// ============ SANITY CHECK ============
+function SanityCheck({ days }: { days: TripDay[] }) {
+  const callAnalyze = useServerFn(analyzeItinerary);
+  const payload = useMemo(() => days.map(d => ({
+    day_number: d.day_number, date: d.date, city: d.city, phase: d.phase, summary: d.summary,
+  })), [days]);
+
+  const q = useQuery({
+    queryKey: ["sanity", payload.map(p => p.day_number + p.city).join("|")],
+    queryFn: () => callAnalyze({ data: { days: payload } }),
+    enabled: payload.length > 0,
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const score = q.data?.score ?? 0;
+  const scoreColor = score >= 80 ? "var(--success)" : score >= 60 ? "var(--accent)" : "var(--destructive)";
+
+  const sevConfig: Record<string, { icon: any; color: string; label: string }> = {
+    critical: { icon: ShieldAlert, color: "var(--destructive)", label: "crítico" },
+    warning:  { icon: AlertTriangle, color: "var(--accent)", label: "atenção" },
+    info:     { icon: Info, color: "var(--muted-foreground)", label: "sugestão" },
+  };
+
+  return (
+    <section>
+      <div className="mb-6 flex items-end justify-between gap-6 flex-wrap border-b border-foreground/15 pb-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground inline-flex items-center gap-2">
+            <Wand2 className="w-3 h-3 text-accent" /> § Sanity check IA
+          </div>
+          <h2 className="font-serif text-3xl mt-1 leading-none">Diagnóstico de roteiro</h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => q.refetch()}
+          disabled={q.isFetching}
+          className="text-[10px] font-mono uppercase tracking-widest border border-foreground/20 px-3 py-1.5 hover:bg-foreground/5 disabled:opacity-50 inline-flex items-center gap-2"
+        >
+          {q.isFetching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+          {q.isFetching ? "Analisando…" : "Reanalisar"}
+        </button>
+      </div>
+
+      {q.isLoading && (
+        <div className="border border-foreground/15 p-10 text-center text-sm text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin mx-auto mb-3" />
+          IA está revisando trajetos, distâncias e janelas sazonais…
+        </div>
+      )}
+
+      {q.data?.error && (
+        <div className="border border-destructive/40 bg-destructive/5 p-5 text-sm text-destructive">{q.data.error}</div>
+      )}
+
+      {q.data && !q.data.error && (
+        <div className="grid lg:grid-cols-[260px_1fr] gap-6">
+          <aside className="border border-foreground/15 p-6">
+            <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Pontuação</div>
+            <div className="font-serif text-6xl tabular leading-none mt-2" style={{ color: scoreColor }}>
+              {score}
+              <span className="text-xl text-muted-foreground">/100</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-4 leading-relaxed">{q.data.summary}</p>
+            <div className="mt-4 pt-4 border-t border-foreground/10 grid grid-cols-3 gap-2 text-center">
+              {(["critical","warning","info"] as const).map(s => {
+                const n = q.data!.alerts.filter(a => a.severity === s).length;
+                const cfg = sevConfig[s];
+                return (
+                  <div key={s}>
+                    <div className="font-mono text-2xl tabular" style={{ color: cfg.color }}>{n}</div>
+                    <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">{cfg.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+
+          <div className="space-y-2">
+            {q.data.alerts.length === 0 && (
+              <div className="border border-success/40 bg-success/5 p-6 text-sm">
+                <div className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-success">
+                  <Check className="w-3 h-3" /> Tudo coerente
+                </div>
+                <p className="font-serif text-xl mt-2">Nenhuma inconsistência detectada</p>
+                <p className="text-sm text-muted-foreground mt-1">A sequência de cidades, distâncias e janelas sazonais estão alinhadas.</p>
+              </div>
+            )}
+            {q.data.alerts.map((a, i) => {
+              const cfg = sevConfig[a.severity];
+              const Icon = cfg.icon;
+              return (
+                <article key={i} className="border bg-background p-5" style={{ borderColor: `color-mix(in oklab, ${cfg.color} 40%, transparent)` }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em]" style={{ color: cfg.color }}>
+                      <Icon className="w-3 h-3" /> {cfg.label}
+                    </div>
+                    <div className="font-mono text-[10px] tabular text-muted-foreground">
+                      {a.day_numbers.length > 0 ? "D" + a.day_numbers.map(n => String(n).padStart(2,"0")).join(" · D") : "geral"}
+                    </div>
+                  </div>
+                  <h3 className="font-serif text-xl mt-2 leading-tight">{a.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{a.body}</p>
+                  {a.suggestion && (
+                    <p className="text-sm mt-3 border-l-2 pl-3 leading-relaxed" style={{ borderColor: cfg.color }}>
+                      <span className="font-mono text-[9px] uppercase tracking-widest mr-2" style={{ color: cfg.color }}>sugestão</span>
+                      {a.suggestion}
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

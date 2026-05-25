@@ -187,10 +187,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Leaflet tiles ficam queimados no dark — aplicar leve inversão de luminosidade */
-  .dark .leaflet-tile-pane {
-    filter: brightness(0.7) invert(1) contrast(0.95) hue-rotate(200deg) saturate(0.5);
-  }
+  /* Tiles CartoDB Dark Matter já são escuros — só normalizar fundo */
   .dark .leaflet-container {
     background: var(--background) !important;
   }
@@ -198,5 +195,15 @@
   .dark .leaflet-popup-tip {
     background: var(--card) !important;
     color: var(--card-foreground) !important;
+  }
+  .dark .leaflet-control-attribution {
+    background: oklch(0 0 0 / 0.5) !important;
+    color: oklch(0.7 0.01 60) !important;
+  }
+  .dark .leaflet-control-attribution a { color: var(--accent) !important; }
+  .dark .leaflet-control-zoom a {
+    background: var(--card) !important;
+    color: var(--foreground) !important;
+    border-color: var(--border) !important;
   }
 }

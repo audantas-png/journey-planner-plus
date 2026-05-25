@@ -58,10 +58,19 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
         style={{ height: "100%", width: "100%", background: "var(--background)" }}
       >
         <TileLayer
-          attribution='&copy; OpenStreetMap'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; OpenStreetMap &copy; CARTO'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
+        />
+        <TileLayer
+          attribution=''
+          url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
+          bounds={JAPAN_BOUNDS}
+          noWrap={true}
+          pane="markerPane"
         />
         <Polyline positions={path} pathOptions={{ color: "#9B2C2C", weight: 2, dashArray: "6 4" }} />
         {Array.from(new Set(points.map(p => p.g.city))).map(city => {

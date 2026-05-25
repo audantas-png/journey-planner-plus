@@ -80,9 +80,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Japão 2026 — Planejador" },
       { name: "description", content: "Planejador interativo da viagem ao Japão de Aurélio & Hameceli — Nov 2026" },
       { property: "og:title", content: "Japão 2026 — Planejador" },
-      { property: "og:description", content: "Roteiro, mapa, orçamento e checklist para a terceira viagem ao Japão" },
+      { property: "og:description", content: "Planejador interativo da viagem ao Japão de Aurélio & Hameceli — Nov 2026" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Japão 2026 — Planejador" },
+      { name: "twitter:description", content: "Planejador interativo da viagem ao Japão de Aurélio & Hameceli — Nov 2026" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/43aca191-07d5-4e32-8d1f-516fba30904b/id-preview-0fed2cb7--5c14a39c-2527-4fb7-b7de-9e387be2ff19.lovable.app-1779682567841.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/43aca191-07d5-4e32-8d1f-516fba30904b/id-preview-0fed2cb7--5c14a39c-2527-4fb7-b7de-9e387be2ff19.lovable.app-1779682567841.png" },
     ],
     links: [
       {

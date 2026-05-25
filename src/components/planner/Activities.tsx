@@ -61,7 +61,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
       day_id: dayId, title: item.title, description: item.description,
       cost_jpy: item.avg_cost_jpy, link: item.gmaps_url,
     });
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error("Não foi possível completar a operação. Tente novamente."); return; }
     qc.invalidateQueries({ queryKey: ["acts"] });
     const day = days.find(d => d.id === dayId);
     toast.success(`"${item.title}" → Dia ${day?.day_number} · ${day?.city}`);
@@ -70,7 +70,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
   async function removeAct(id: string) {
     const { error } = await supabase.from("day_activities").delete().eq("id", id);
     if (error) {
-      toast.error(error.message);
+      toast.error("Não foi possível completar a operação. Tente novamente.");
       return;
     }
     qc.invalidateQueries({ queryKey: ["acts"] });
@@ -80,7 +80,7 @@ export function Activities({ catalog, days, acts, budget, geo, fxRate }: Props) 
   async function removeCatalog(id: string) {
     const { error } = await supabase.from("activity_catalog").delete().eq("id", id);
     if (error) {
-      toast.error(error.message);
+      toast.error("Não foi possível completar a operação. Tente novamente.");
       return;
     }
     qc.invalidateQueries({ queryKey: ["catalog"] });

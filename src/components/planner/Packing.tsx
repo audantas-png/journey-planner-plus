@@ -66,7 +66,7 @@ function ChecklistColumn({
       .from("checklist_items")
       .update({ done: !item.done })
       .eq("id", item.id);
-    if (error) toast.error(error.message);
+    if (error) toast.error("Não foi possível completar a operação. Tente novamente.");
     qc.invalidateQueries({ queryKey: ["checklist"] });
   }
 
@@ -78,14 +78,14 @@ function ChecklistColumn({
     const { error } = await supabase.from("checklist_items").insert({
       text, kind, position: nextPos,
     });
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error("Não foi possível completar a operação. Tente novamente."); return; }
     setAdding("");
     qc.invalidateQueries({ queryKey: ["checklist"] });
   }
 
   async function remove(id: string) {
     const { error } = await supabase.from("checklist_items").delete().eq("id", id);
-    if (error) toast.error(error.message);
+    if (error) toast.error("Não foi possível completar a operação. Tente novamente.");
     qc.invalidateQueries({ queryKey: ["checklist"] });
   }
 

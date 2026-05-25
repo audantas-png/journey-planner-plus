@@ -479,7 +479,7 @@ function Itinerary({ days, acts, checklist }: { days: TripDay[]; acts: DayActivi
   async function deleteAct(id: string) {
     const { error } = await supabase.from("day_activities").delete().eq("id", id);
     if (error) {
-      toast.error(error.message);
+      toast.error("Não foi possível completar a operação. Tente novamente.");
       return;
     }
     qc.invalidateQueries({ queryKey: ["acts"] });
@@ -773,7 +773,7 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
     if (!confirm(`Remover categoria "${name}" e todos os seus registros?`)) return;
     await supabase.from("expenses").delete().eq("category_id", id);
     const { error } = await supabase.from("budget_categories").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error("Não foi possível completar a operação. Tente novamente."); return; }
     qc.invalidateQueries({ queryKey: ["budget"] });
     qc.invalidateQueries({ queryKey: ["expenses"] });
     toast.success("Categoria removida");
@@ -784,7 +784,7 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
     const { error } = await supabase.from("budget_categories").insert({
       name: name.trim(), planned_jpy: planned, position: nextPos,
     });
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error("Não foi possível completar a operação. Tente novamente."); return; }
     qc.invalidateQueries({ queryKey: ["budget"] });
     toast.success("Categoria adicionada");
   }

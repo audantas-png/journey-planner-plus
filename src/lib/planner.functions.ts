@@ -21,7 +21,7 @@ export const suggestActivities = createServerFn({ method: "POST" })
         weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
       });
       const { output } = await generateText({
-        model: gateway("google/gemini-3-flash-preview"),
+        model: gateway("google/gemini-2.5-flash"),
         output: Output.object({
           schema: z.object({
             suggestions: z.array(z.object({
@@ -45,7 +45,8 @@ Devolva 4-6 sugestões. Inclua ao menos 1 evento/festival/iluminação sazonal r
       return { suggestions: output.suggestions, error: null };
     } catch (e) {
       console.error("[suggestActivities]", e);
-      return { suggestions: [], error: "Falha ao gerar sugestões" };
+      const msg = e instanceof Error ? e.message : "Falha ao gerar sugestões";
+      return { suggestions: [], error: msg.slice(0, 200) };
     }
   });
 
@@ -71,7 +72,7 @@ export const analyzeItinerary = createServerFn({ method: "POST" })
         .join("\n");
 
       const { output } = await generateText({
-        model: gateway("google/gemini-3-flash-preview"),
+        model: gateway("google/gemini-2.5-flash"),
         output: Output.object({
           schema: z.object({
             score: z.number().int().min(0).max(100),
@@ -100,6 +101,7 @@ NÃO inventem problemas inexistentes. Se a sequência for boa, devolva alerts va
       return { alerts: output.alerts, summary: output.summary, score: output.score, error: null };
     } catch (e) {
       console.error("[analyzeItinerary]", e);
-      return { alerts: [], summary: "", score: 0, error: "Falha na análise" };
+      const msg = e instanceof Error ? e.message : "Falha na análise";
+      return { alerts: [], summary: "", score: 0, error: msg.slice(0, 200) };
     }
   });

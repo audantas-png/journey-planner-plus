@@ -83,6 +83,7 @@ export type Database = {
           day_id: string | null
           done: boolean
           id: string
+          kind: string
           position: number
           text: string
         }
@@ -91,6 +92,7 @@ export type Database = {
           day_id?: string | null
           done?: boolean
           id?: string
+          kind?: string
           position?: number
           text: string
         }
@@ -99,6 +101,7 @@ export type Database = {
           day_id?: string | null
           done?: boolean
           id?: string
+          kind?: string
           position?: number
           text?: string
         }

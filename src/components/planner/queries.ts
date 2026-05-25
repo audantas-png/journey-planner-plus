@@ -22,6 +22,7 @@ export type Expense = {
 };
 export type ChecklistItem = {
   id: string; day_id: string | null; text: string; done: boolean; position: number;
+  kind: "day" | "pack" | "buy";
 };
 export type CityGeo = { city: string; lat: number; lng: number; region: string | null };
 

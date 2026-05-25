@@ -5,12 +5,12 @@ import { analyzeItinerary } from "@/lib/planner.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { TripMap } from "./Map";
 import { Activities } from "./Activities";
+import { Packing } from "./Packing";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
   fetchChecklist, fetchGeo, fetchFxRate, fxRateWithIof, IOF_RATE, PHASES,
   type TripDay, type DayActivity, type BudgetCategory, type Expense, type ChecklistItem,
 } from "./queries";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import {
   ChevronDown, Plus, Check, MapPin, ExternalLink, LogOut, Trash2,
   Compass, CalendarDays, Map as MapIcon, Sparkles, Wallet, Train,
-  AlertTriangle, ShieldAlert, Info, Loader2, Wand2,
+  AlertTriangle, ShieldAlert, Info, Loader2, Wand2, Luggage,
 } from "lucide-react";
 
 const fmtBRL = (v: number) => "R$ " + Math.round(v).toLocaleString("pt-BR");
@@ -30,7 +30,7 @@ export function Planner() {
   return <PlannerApp />;
 }
 
-type Tab = "overview" | "itinerary" | "map" | "activities" | "budget";
+type Tab = "overview" | "itinerary" | "map" | "activities" | "budget" | "packing";
 
 function PlannerApp() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -56,6 +56,7 @@ function PlannerApp() {
     { id: "map", label: "Mapa da rota", num: "03", Icon: MapIcon },
     { id: "activities", label: "Atividades", num: "04", Icon: Sparkles },
     { id: "budget", label: "Orçamento", num: "05", Icon: Wallet },
+    { id: "packing", label: "Bagagem & Compras", num: "06", Icon: Luggage },
   ];
 
   const activeTab = tabs.find(t => t.id === tab)!;
@@ -68,7 +69,6 @@ function PlannerApp() {
           <span>日本 · Nihon · 2026</span>
           <span className="hidden md:inline">Diário de Viagem · Volume III · Outono</span>
           <div className="inline-flex items-center gap-2">
-            <ThemeToggle />
             <button onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-1.5 hover:opacity-70">
               <LogOut className="w-3 h-3" /> Sair
             </button>
@@ -146,6 +146,7 @@ function PlannerApp() {
           />
         )}
         {tab === "budget" && <Budget budget={budget.data ?? []} expenses={expenses.data ?? []} fxRate={fxRate} />}
+        {tab === "packing" && <Packing items={checklist.data ?? []} />}
       </main>
 
       <footer className="border-t border-foreground/15 mt-20">

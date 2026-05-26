@@ -95,7 +95,7 @@ Responda APENAS com este JSON:
         duration_minutes: Number.isFinite(Number(s?.duration_minutes)) ? Math.max(0, Math.round(Number(s.duration_minutes))) : 60,
         tip: String(s?.tip ?? "").slice(0, 300),
         date_specific: Boolean(s?.date_specific),
-      })).filter((s) => s.title);
+      })).filter((s: Suggestion) => Boolean(s.title));
       if (!suggestions.length) return { suggestions: [], error: "IA retornou resposta vazia. Tente novamente." };
       return { suggestions, error: null };
     } catch (e) {
@@ -168,7 +168,7 @@ Responda APENAS com este JSON:
         title: String(a?.title ?? "").slice(0, 200),
         body: String(a?.body ?? "").slice(0, 800),
         suggestion: String(a?.suggestion ?? "").slice(0, 400),
-      })).filter((a) => a.title);
+      })).filter((a: ItineraryAlert) => Boolean(a.title));
       const score = Number.isFinite(Number(parsed?.score)) ? Math.max(0, Math.min(100, Math.round(Number(parsed.score)))) : 0;
       const summary = String(parsed?.summary ?? "").slice(0, 600);
       if (!parsed) return { alerts: [], summary: "", score: 0, error: "IA retornou resposta inválida. Tente novamente." };

@@ -1,8 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+function extractJson(text: string): any | null {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = (fenced ? fenced[1] : text).trim();
+  try { return JSON.parse(raw); } catch {}
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    try { return JSON.parse(raw.slice(first, last + 1)); } catch {}
+  }
+  return null;
+}
 
 const SuggestInput = z.object({
   city: z.string().min(1).max(100),
@@ -10,32 +23,9 @@ const SuggestInput = z.object({
   existingTitles: z.array(z.string().max(200)).max(50).optional(),
 });
 
-const SuggestionSchema = z.object({
-  suggestions: z
-    .array(
-      z.object({
-        title: z.string(),
-        description: z.string(),
-        category: z.enum([
-          "templo",
-          "gastronomia",
-          "natureza",
-          "museu",
-          "experiencia",
-          "compras",
-          "festival",
-          "evento",
-          "geral",
-        ]),
-        avg_cost_jpy: z.number().int().describe("Custo médio em ienes; 0 se gratuito"),
-        duration_minutes: z.number().int().describe("Duração estimada em minutos"),
-        tip: z.string().describe("Dica prática curta; pode ser vazia"),
-        date_specific: z.boolean(),
-      }),
-    )
-    .min(3)
-    .max(6),
-});
+const ALLOWED_CATS = new Set([
+  "templo","gastronomia","natureza","museu","experiencia","compras","festival","evento","geral",
+]);
 
 export const suggestActivities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -53,17 +43,43 @@ export const suggestActivities = createServerFn({ method: "POST" })
         year: "numeric",
         timeZone: "UTC",
       });
-      const { object } = await generateObject({
+      const { text } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
-        schema: SuggestionSchema,
-        system: `Você é um curador de viagens especializado em Japão. Sugira atividades específicas, evitando clichês turísticos óbvios. Considere SEMPRE eventos sazonais reais que acontecem na data fornecida (festivais, koyo, iluminações, exposições temporárias, partidas esportivas, jogos de baseball/sumo se em temporada). Se houver evento real conhecido naquela data, marque date_specific=true. Custos em ienes (¥). Categorias permitidas: templo, gastronomia, natureza, museu, experiencia, compras, festival, evento, geral.`,
+        system: `Você é um curador de viagens especializado em Japão. Devolva SOMENTE JSON válido, sem markdown, sem comentários.`,
         prompt: `Cidade: ${data.city}
 Data: ${dayName}
-Já planejado neste dia (não repita): ${(data.existingTitles ?? []).join(" | ") || "nada"}
+Já planejado (não repita): ${(data.existingTitles ?? []).join(" | ") || "nada"}
 
-Devolva 4-6 sugestões. Inclua ao menos 1 evento/festival/iluminação sazonal real para esta data se existir em ${data.city}. Descrições em português, concisas (1-2 frases). Dicas práticas (horário, transporte, reserva). Sempre preencha todos os campos; se não houver dica, use string vazia; se for gratuito, use 0.`,
+Gere 4-6 sugestões específicas (evite clichês), incluindo ao menos 1 evento/festival/iluminação sazonal real se existir nesta data.
+
+Responda APENAS com este JSON:
+{
+  "suggestions": [
+    {
+      "title": "string",
+      "description": "string em português, 1-2 frases",
+      "category": "uma de: templo|gastronomia|natureza|museu|experiencia|compras|festival|evento|geral",
+      "avg_cost_jpy": número inteiro (0 se gratuito),
+      "duration_minutes": número inteiro,
+      "tip": "dica curta ou string vazia",
+      "date_specific": true|false
+    }
+  ]
+}`,
       });
-      return { suggestions: object.suggestions, error: null };
+      const parsed = extractJson(text);
+      const rawList = Array.isArray(parsed?.suggestions) ? parsed.suggestions : [];
+      const suggestions = rawList.map((s: any) => ({
+        title: String(s?.title ?? "").slice(0, 200),
+        description: String(s?.description ?? "").slice(0, 600),
+        category: ALLOWED_CATS.has(String(s?.category)) ? String(s.category) : "geral",
+        avg_cost_jpy: Number.isFinite(Number(s?.avg_cost_jpy)) ? Math.max(0, Math.round(Number(s.avg_cost_jpy))) : 0,
+        duration_minutes: Number.isFinite(Number(s?.duration_minutes)) ? Math.max(0, Math.round(Number(s.duration_minutes))) : 60,
+        tip: String(s?.tip ?? "").slice(0, 300),
+        date_specific: Boolean(s?.date_specific),
+      })).filter((s: any) => s.title);
+      if (!suggestions.length) return { suggestions: [], error: "IA retornou resposta vazia. Tente novamente." };
+      return { suggestions, error: null };
     } catch (e) {
       console.error("[suggestActivities]", e);
       const msg = e instanceof Error ? e.message : "Falha ao gerar sugestões";
@@ -86,21 +102,7 @@ const AnalyzeInput = z.object({
     .max(40),
 });
 
-const AnalyzeSchema = z.object({
-  score: z.number().int().min(0).max(100),
-  summary: z.string(),
-  alerts: z
-    .array(
-      z.object({
-        severity: z.enum(["critical", "warning", "info"]),
-        day_numbers: z.array(z.number().int()),
-        title: z.string(),
-        body: z.string(),
-        suggestion: z.string().describe("Sugestão prática; string vazia se não houver"),
-      }),
-    )
-    .max(12),
-});
+const ALLOWED_SEV = new Set(["critical","warning","info"]);
 
 export const analyzeItinerary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -117,27 +119,42 @@ export const analyzeItinerary = createServerFn({ method: "POST" })
         )
         .join("\n");
 
-      const { object } = await generateObject({
+      const { text } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
-        schema: AnalyzeSchema,
-        system: `Você é um logista de viagens pelo Japão. Analise a sequência de cidades em busca de ineficiências reais de trajeto via Shinkansen/JR (a viagem é 100% terrestre, sem voos domésticos). Considere:
-- Zigue-zague geográfico (ex: Tóquio→Osaka→Tóquio→Kyoto, ou ir e voltar sem necessidade)
-- Trechos longos demais num único dia (>5h de trem) sem motivo
-- Pouco tempo numa cidade que demanda mais (Kyoto <2 dias, Tóquio <3 dias)
-- Tempo demais sem mudança em cidade pequena
-- Ordenação inversa lógica (ex: visitar Kyushu antes de Kansai vindo de Tóquio é ineficiente — passa duas vezes por Osaka)
-- Conflito com horários sazonais (koyo, festivais, manutenção do Ghibli Park às terças, etc.)
-- Saída/retorno desalinhados (ex: voo de retorno em Tóquio mas último dia em Kyushu sem buffer)
+        system: `Você é um logista de viagens pelo Japão. Devolva SOMENTE JSON válido, sem markdown, sem comentários.`,
+        prompt: `Analise a sequência de cidades buscando ineficiências reais (zigue-zague, trechos >5h, tempo insuficiente, ordenação inversa, conflitos sazonais como Ghibli fechado às terças). Não invente problemas; se estiver bom, alerts=[] e score alto.
 
-NÃO inventem problemas inexistentes. Se a sequência for boa, devolva alerts vazio e score alto. Severity: critical (perde dinheiro/tempo grande), warning (subótimo), info (sugestão). Sempre preencha todos os campos; se não houver sugestão, use string vazia.`,
-        prompt: `Itinerário:\n${list}\n\nSaída/retorno: voo internacional GRU↔HND (Tóquio Haneda). Pass: JR Pass 21 dias.\n\nGere análise técnica e específica em português. Cite números de dias afetados.`,
+Itinerário (100% terrestre, JR Pass 21d, voo GRU↔HND):
+${list}
+
+Responda APENAS com este JSON:
+{
+  "score": número inteiro 0-100,
+  "summary": "resumo curto em português",
+  "alerts": [
+    {
+      "severity": "critical|warning|info",
+      "day_numbers": [números dos dias afetados],
+      "title": "string",
+      "body": "explicação técnica em português",
+      "suggestion": "sugestão prática ou string vazia"
+    }
+  ]
+}`,
       });
-      return {
-        alerts: object.alerts,
-        summary: object.summary,
-        score: object.score,
-        error: null,
-      };
+      const parsed = extractJson(text);
+      const rawAlerts = Array.isArray(parsed?.alerts) ? parsed.alerts : [];
+      const alerts = rawAlerts.map((a: any) => ({
+        severity: ALLOWED_SEV.has(String(a?.severity)) ? String(a.severity) : "info",
+        day_numbers: Array.isArray(a?.day_numbers) ? a.day_numbers.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [],
+        title: String(a?.title ?? "").slice(0, 200),
+        body: String(a?.body ?? "").slice(0, 800),
+        suggestion: String(a?.suggestion ?? "").slice(0, 400),
+      })).filter((a: any) => a.title);
+      const score = Number.isFinite(Number(parsed?.score)) ? Math.max(0, Math.min(100, Math.round(Number(parsed.score)))) : 0;
+      const summary = String(parsed?.summary ?? "").slice(0, 600);
+      if (!parsed) return { alerts: [], summary: "", score: 0, error: "IA retornou resposta inválida. Tente novamente." };
+      return { alerts, summary, score, error: null };
     } catch (e) {
       console.error("[analyzeItinerary]", e);
       const msg = e instanceof Error ? e.message : "Falha na análise";

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export function AuthScreen() {
+export function AuthScreen({ blockedEmail }: { blockedEmail?: string | null } = {}) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +55,11 @@ export function AuthScreen() {
             Planejador da terceira viagem<br />Aurélio · Hameceli
           </p>
         </div>
+        {blockedEmail && (
+          <div className="mb-6 border border-destructive/40 bg-destructive/10 px-4 py-3 text-[11px] font-mono uppercase tracking-wider text-destructive">
+            Acesso restrito. A conta <span className="normal-case">{blockedEmail}</span> não tem permissão.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs font-mono uppercase tracking-wider">Email</Label>

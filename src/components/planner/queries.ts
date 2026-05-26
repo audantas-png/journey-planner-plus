@@ -60,6 +60,7 @@ export const IOF_RATE = 0.0638;
 
 const FX_KEY = "jpy_brl_spot";
 const FX_FALLBACK_SPOT = 0.038;
+const FX_USD_FALLBACK = 0.0064; // JPY → USD
 
 /** Cotação spot JPY→BRL (sem IOF). */
 export async function fetchFxRate(): Promise<number> {
@@ -77,6 +78,20 @@ export async function fetchFxRate(): Promise<number> {
     return rate;
   } catch {
     return FX_FALLBACK_SPOT;
+  }
+}
+
+/** Cotações JPY→{BRL,USD} spot. Use para conversões de entrada de gastos. */
+export async function fetchFxMulti(): Promise<{ jpyBrl: number; jpyUsd: number }> {
+  try {
+    const r = await fetch("https://api.frankfurter.app/latest?from=JPY&to=BRL,USD");
+    const j = await r.json();
+    return {
+      jpyBrl: j.rates?.BRL ?? FX_FALLBACK_SPOT,
+      jpyUsd: j.rates?.USD ?? FX_USD_FALLBACK,
+    };
+  } catch {
+    return { jpyBrl: FX_FALLBACK_SPOT, jpyUsd: FX_USD_FALLBACK };
   }
 }
 

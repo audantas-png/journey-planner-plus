@@ -27,6 +27,24 @@ const ALLOWED_CATS = new Set([
   "templo","gastronomia","natureza","museu","experiencia","compras","festival","evento","geral",
 ]);
 
+export type Suggestion = {
+  title: string;
+  description: string;
+  category: string;
+  avg_cost_jpy: number;
+  duration_minutes: number;
+  tip: string;
+  date_specific: boolean;
+};
+
+export type ItineraryAlert = {
+  severity: string;
+  day_numbers: number[];
+  title: string;
+  body: string;
+  suggestion: string;
+};
+
 export const suggestActivities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => SuggestInput.parse(input))
@@ -69,7 +87,7 @@ Responda APENAS com este JSON:
       });
       const parsed = extractJson(text);
       const rawList = Array.isArray(parsed?.suggestions) ? parsed.suggestions : [];
-      const suggestions = rawList.map((s: any) => ({
+      const suggestions: Suggestion[] = rawList.map((s: any): Suggestion => ({
         title: String(s?.title ?? "").slice(0, 200),
         description: String(s?.description ?? "").slice(0, 600),
         category: ALLOWED_CATS.has(String(s?.category)) ? String(s.category) : "geral",
@@ -77,7 +95,7 @@ Responda APENAS com este JSON:
         duration_minutes: Number.isFinite(Number(s?.duration_minutes)) ? Math.max(0, Math.round(Number(s.duration_minutes))) : 60,
         tip: String(s?.tip ?? "").slice(0, 300),
         date_specific: Boolean(s?.date_specific),
-      })).filter((s: any) => s.title);
+      })).filter((s) => s.title);
       if (!suggestions.length) return { suggestions: [], error: "IA retornou resposta vazia. Tente novamente." };
       return { suggestions, error: null };
     } catch (e) {
@@ -144,13 +162,13 @@ Responda APENAS com este JSON:
       });
       const parsed = extractJson(text);
       const rawAlerts = Array.isArray(parsed?.alerts) ? parsed.alerts : [];
-      const alerts = rawAlerts.map((a: any) => ({
+      const alerts: ItineraryAlert[] = rawAlerts.map((a: any): ItineraryAlert => ({
         severity: ALLOWED_SEV.has(String(a?.severity)) ? String(a.severity) : "info",
         day_numbers: Array.isArray(a?.day_numbers) ? a.day_numbers.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [],
         title: String(a?.title ?? "").slice(0, 200),
         body: String(a?.body ?? "").slice(0, 800),
         suggestion: String(a?.suggestion ?? "").slice(0, 400),
-      })).filter((a: any) => a.title);
+      })).filter((a) => a.title);
       const score = Number.isFinite(Number(parsed?.score)) ? Math.max(0, Math.min(100, Math.round(Number(parsed.score)))) : 0;
       const summary = String(parsed?.summary ?? "").slice(0, 600);
       if (!parsed) return { alerts: [], summary: "", score: 0, error: "IA retornou resposta inválida. Tente novamente." };

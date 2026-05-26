@@ -8,7 +8,7 @@ import { Activities } from "./Activities";
 import { Packing } from "./Packing";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
-  fetchChecklist, fetchGeo, fetchFxRate, fxRateWithIof, IOF_RATE, PHASES,
+  fetchChecklist, fetchGeo, fetchFxRate, fetchFxMulti, fxRateWithIof, IOF_RATE, PHASES,
   type TripDay, type DayActivity, type BudgetCategory, type Expense, type ChecklistItem,
 } from "./queries";
 import { cn } from "@/lib/utils";

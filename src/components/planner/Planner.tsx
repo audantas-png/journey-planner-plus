@@ -742,6 +742,8 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
   const [unit, setUnit] = useState<"jpy" | "brl">("brl");
   const [adding, setAdding] = useState<string | null>(null);
   const qc = useQueryClient();
+  const fxMulti = useQuery({ queryKey: ["fxMulti"], queryFn: fetchFxMulti, staleTime: 3600_000 });
+  const rates = fxMulti.data ?? { jpyBrl: 0.038, jpyUsd: 0.0064 };
 
   const totalPlan = budget.reduce((s, b) => s + Number(b.planned_jpy), 0);
   const totalSpent = expenses.reduce((s, e) => s + Number(e.amount_jpy), 0);
@@ -751,7 +753,7 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
   const fmt = (jpy: number) => unit === "jpy" ? fmtJPY(jpy) : fmtBRL(jpy * fxRate);
 
   async function addExpense(catId: string, amountJpy: number, note: string) {
-    if (!amountJpy) return;
+    if (!amountJpy || !Number.isFinite(amountJpy)) return;
     await supabase.from("expenses").insert({ category_id: catId, amount_jpy: amountJpy, note });
     qc.invalidateQueries({ queryKey: ["expenses"] });
     setAdding(null);
@@ -880,7 +882,7 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
                 </div>
               </div>
               {adding === cat.id && (
-                <ExpenseForm onCancel={() => setAdding(null)} onSubmit={(amt, note) => addExpense(cat.id, amt, note)} />
+                <ExpenseForm rates={rates} onCancel={() => setAdding(null)} onSubmit={(amt, note) => addExpense(cat.id, amt, note)} />
               )}
               <ul className="mt-4 pt-4 border-t border-foreground/10 space-y-2">
                 {catExp.length > 0 ? catExp.slice(0, 6).map(e => (

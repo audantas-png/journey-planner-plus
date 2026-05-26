@@ -1023,16 +1023,52 @@ function BudgetSpendDonut({
   );
 }
 
-function ExpenseForm({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (amt: number, note: string) => void }) {
+type Currency = "JPY" | "BRL" | "USD";
+
+function ExpenseForm({
+  onCancel, onSubmit, rates,
+}: {
+  onCancel: () => void;
+  onSubmit: (amtJpy: number, note: string) => void;
+  rates: { jpyBrl: number; jpyUsd: number };
+}) {
   const [amt, setAmt] = useState("");
   const [note, setNote] = useState("");
+  const [cur, setCur] = useState<Currency>("JPY");
+
+  const toJpy = (raw: number): number => {
+    if (!Number.isFinite(raw)) return 0;
+    if (cur === "JPY") return Math.round(raw);
+    if (cur === "BRL") return Math.round(raw / (rates.jpyBrl || 0.038));
+    return Math.round(raw / (rates.jpyUsd || 0.0064));
+  };
+
+  const preview = toJpy(Number(amt));
+  const symbol = cur === "JPY" ? "¥" : cur === "BRL" ? "R$" : "US$";
+
   return (
-    <form onSubmit={e => { e.preventDefault(); onSubmit(Number(amt), note); }}
-      className="mt-4 pt-4 border-t border-foreground/10 flex gap-2 items-center">
-      <Input type="number" placeholder="valor em ¥" value={amt} onChange={e => setAmt(e.target.value)}
-        className="w-32 rounded-none border-foreground/20 bg-transparent h-8 text-sm tabular" required />
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSubmit(toJpy(Number(amt)), note); }}
+      className="mt-4 pt-4 border-t border-foreground/10 flex flex-wrap gap-2 items-center"
+    >
+      <div className="inline-flex rounded-none border border-foreground/20 overflow-hidden h-8">
+        {(["JPY","BRL","USD"] as Currency[]).map(c => (
+          <button key={c} type="button" onClick={() => setCur(c)}
+            className={`px-2.5 font-mono text-[10px] uppercase tracking-widest ${cur === c ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}>
+            {c}
+          </button>
+        ))}
+      </div>
+      <Input
+        type="number" step="0.01" inputMode="decimal"
+        placeholder={`valor em ${symbol}`} value={amt} onChange={e => setAmt(e.target.value)}
+        className="w-32 rounded-none border-foreground/20 bg-transparent h-8 text-sm tabular" required
+      />
       <Input placeholder="descrição (ex.: jantar em Pontocho)" value={note} onChange={e => setNote(e.target.value)}
-        className="flex-1 rounded-none border-foreground/20 bg-transparent h-8 text-sm" />
+        className="flex-1 min-w-[180px] rounded-none border-foreground/20 bg-transparent h-8 text-sm" />
+      {cur !== "JPY" && preview > 0 && (
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground tabular">≈ ¥{preview.toLocaleString("ja-JP")}</span>
+      )}
       <Button type="submit" size="sm" className="rounded-none bg-foreground text-background h-8 font-mono text-[10px] uppercase tracking-widest">Registrar</Button>
       <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground text-lg leading-none px-1">×</button>
     </form>

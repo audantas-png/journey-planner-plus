@@ -869,12 +869,11 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
                   </div>
                 </div>
                 <div className="flex flex-col items-start gap-3 md:items-end">
-                  <div className="flex items-center gap-2">
-                    <input type="number" defaultValue={planned}
-                      onBlur={e => { const v = Number(e.target.value); if (v !== planned) updatePlanned(cat.id, v); }}
-                      className="w-28 bg-transparent border border-foreground/15 px-3 py-2 text-right text-sm tabular outline-none focus:border-foreground" />
-                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">JPY</span>
-                  </div>
+                  <PlannedAmountEditor
+                    plannedJpy={planned}
+                    rates={rates}
+                    onSave={(jpy) => updatePlanned(cat.id, jpy)}
+                  />
                   <button type="button" onClick={() => setAdding(adding === cat.id ? null : cat.id)}
                     className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground hover:border-foreground/40 hover:text-foreground">
                     <Plus className="w-3 h-3" /> add
@@ -1039,8 +1038,12 @@ function ExpenseForm({
   const toJpy = (raw: number): number => {
     if (!Number.isFinite(raw)) return 0;
     if (cur === "JPY") return Math.round(raw);
-    if (cur === "BRL") return Math.round(raw / (rates.jpyBrl || 0.038));
-    return Math.round(raw / (rates.jpyUsd || 0.0064));
+    // O gasto em BRL/USD já representa o valor cobrado no cartão brasileiro
+    // (spot + IOF). Para converter de volta a JPY corretamente, usamos a
+    // taxa efetiva COM IOF — assim o round-trip JPY → BRL bate.
+    const iof = 1 + IOF_RATE;
+    if (cur === "BRL") return Math.round(raw / ((rates.jpyBrl || 0.038) * iof));
+    return Math.round(raw / ((rates.jpyUsd || 0.0064) * iof));
   };
 
   const preview = toJpy(Number(amt));
@@ -1109,5 +1112,86 @@ function NewCategoryForm({ onAdd }: { onAdd: (name: string, planned: number) => 
       </Button>
       <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none px-1">×</button>
     </form>
+  );
+}
+
+function PlannedAmountEditor({
+  plannedJpy,
+  rates,
+  onSave,
+}: {
+  plannedJpy: number;
+  rates: { jpyBrl: number; jpyUsd: number };
+  onSave: (jpy: number) => void;
+}) {
+  const [cur, setCur] = useState<Currency>("JPY");
+  const iof = 1 + IOF_RATE;
+
+  const toDisplay = (jpy: number): string => {
+    if (cur === "JPY") return String(Math.round(jpy));
+    if (cur === "BRL") return (jpy * (rates.jpyBrl || 0.038) * iof).toFixed(2);
+    return (jpy * (rates.jpyUsd || 0.0064) * iof).toFixed(2);
+  };
+
+  const toJpy = (raw: number): number => {
+    if (!Number.isFinite(raw)) return 0;
+    if (cur === "JPY") return Math.round(raw);
+    if (cur === "BRL") return Math.round(raw / ((rates.jpyBrl || 0.038) * iof));
+    return Math.round(raw / ((rates.jpyUsd || 0.0064) * iof));
+  };
+
+  const [value, setValue] = useState<string>(() => toDisplay(plannedJpy));
+
+  // Sync when currency changes or external planned changes.
+  const lastKey = useMemo(() => `${cur}:${plannedJpy}`, [cur, plannedJpy]);
+  const [seenKey, setSeenKey] = useState(lastKey);
+  if (seenKey !== lastKey) {
+    setSeenKey(lastKey);
+    setValue(toDisplay(plannedJpy));
+  }
+
+  const commit = () => {
+    const jpy = toJpy(Number(value));
+    if (jpy !== plannedJpy) onSave(jpy);
+  };
+
+  const symbol = cur === "JPY" ? "¥" : cur === "BRL" ? "R$" : "US$";
+  const previewJpy = toJpy(Number(value));
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <div className="inline-flex border border-foreground/15 overflow-hidden h-9">
+          {(["JPY","BRL","USD"] as Currency[]).map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCur(c)}
+              className={`px-2 font-mono text-[10px] uppercase tracking-widest ${cur === c ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground pointer-events-none">{symbol}</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step={cur === "JPY" ? "1" : "0.01"}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            className="w-32 bg-transparent border border-foreground/15 pl-8 pr-2 py-2 text-right text-sm tabular outline-none focus:border-foreground"
+          />
+        </div>
+      </div>
+      {cur !== "JPY" && previewJpy > 0 && (
+        <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground tabular">
+          ≈ ¥{previewJpy.toLocaleString("ja-JP")}
+        </span>
+      )}
+    </div>
   );
 }

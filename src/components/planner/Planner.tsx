@@ -316,6 +316,9 @@ function Overview({ days, acts, budget, expenses, daysLeft, fxRate, tripStart, t
 
       {/* Sanity Check via IA */}
       <SanityCheck days={days} />
+
+      {/* Reroteirizador via IA */}
+      <Reroute days={days} tripStart={tripStart} tripEnd={tripEnd} />
     </div>
   );
 }

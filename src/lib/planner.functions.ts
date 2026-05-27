@@ -179,3 +179,148 @@ Responda APENAS com este JSON:
       return { alerts: [], summary: "", score: 0, error: msg.slice(0, 200) };
     }
   });
+
+// ============================================================
+// REROTEIRIZADOR — gera nova sequência de cidades via IA
+// ============================================================
+
+const ALLOWED_PHASES = new Set([
+  "arrival","tokyo","onsen","transit","kyoto","ghibli","kansai",
+  "osaka","hiroshima","kyushu","hokkaido","departure",
+]);
+
+const RegenInput = z.object({
+  targetCities: z.number().int().min(3).max(25),
+  startDate: z.string().min(8).max(20),
+  endDate: z.string().min(8).max(20),
+  mustInclude: z.array(z.string().max(80)).max(20).optional(),
+  notes: z.string().max(800).optional(),
+});
+
+export type ProposedDay = {
+  day_number: number;
+  date: string; // YYYY-MM-DD
+  city: string;
+  phase: string;
+  summary: string;
+};
+
+export type ProposedCity = {
+  city: string;
+  lat: number;
+  lng: number;
+  region: string;
+};
+
+function daysBetween(a: string, b: string): number {
+  const da = new Date(a + "T00:00:00Z").getTime();
+  const db = new Date(b + "T00:00:00Z").getTime();
+  return Math.max(1, Math.round((db - da) / 86400000) + 1);
+}
+
+function dateAtOffset(start: string, offset: number): string {
+  const d = new Date(start + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+export const regenerateItinerary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => RegenInput.parse(input))
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) {
+      return { days: [], cities: [], rationale: "", error: "Lovable AI indisponível" } as {
+        days: ProposedDay[]; cities: ProposedCity[]; rationale: string; error: string | null;
+      };
+    }
+    const totalDays = daysBetween(data.startDate, data.endDate);
+    try {
+      const gateway = createLovableAiGatewayProvider(key);
+      const { text } = await generateText({
+        model: gateway("google/gemini-2.5-flash"),
+        system: `Você é um planejador especialista em viagens 100% terrestres pelo Japão (JR Pass 21d, voo internacional GRU↔HND). Devolva SOMENTE JSON válido, sem markdown, sem comentários.`,
+        prompt: `Gere um novo roteiro otimizado para ${totalDays} dias entre ${data.startDate} e ${data.endDate}, visitando EXATAMENTE ${data.targetCities} cidades distintas (paradas únicas — não conte retornos a uma cidade já visitada como nova cidade).
+
+Regras:
+- Cubra TODOS os ${totalDays} dias do início ao fim, um registro por dia.
+- Dia 1 começa em ${data.startDate}, dia ${totalDays} termina em ${data.endDate}.
+- Sem voos domésticos. Conexões por Shinkansen, expressos e ônibus regionais.
+- Minimize zigue-zague geográfico. Pense em fluxo lógico (ex.: Tóquio → Hakone → Kyoto → Osaka → Hiroshima → Kyushu, ou Tóquio → Tohoku → Hokkaido).
+- Distribua noites de forma realista (mínimo 1 noite por cidade, ideal 2-4 em hubs).
+- Use UMA das fases: arrival, tokyo, onsen, transit, kyoto, ghibli, kansai, osaka, hiroshima, kyushu, hokkaido, departure.
+- Dia 1 = "arrival", último dia = "departure".
+${data.mustInclude?.length ? `- DEVE incluir estas cidades: ${data.mustInclude.join(", ")}` : ""}
+${data.notes ? `- Preferências do viajante: ${data.notes}` : ""}
+
+Responda APENAS com este JSON:
+{
+  "rationale": "explicação curta em português da lógica da rota (2-3 frases)",
+  "cities": [
+    { "city": "Nome em PT/EN (ex: Tóquio, Kyoto, Osaka)", "lat": número, "lng": número, "region": "Kanto|Kansai|Chubu|Tohoku|Hokkaido|Chugoku|Shikoku|Kyushu|Okinawa" }
+  ],
+  "days": [
+    { "day_number": 1, "date": "YYYY-MM-DD", "city": "Nome", "phase": "arrival", "summary": "resumo curto do dia em pt-BR" }
+  ]
+}`,
+      });
+      const parsed = extractJson(text);
+      if (!parsed) {
+        return { days: [], cities: [], rationale: "", error: "IA retornou resposta inválida. Tente novamente." };
+      }
+
+      const rawDays = Array.isArray(parsed?.days) ? parsed.days : [];
+      let days: ProposedDay[] = rawDays
+        .map((d: any, i: number): ProposedDay => ({
+          day_number: Number.isFinite(Number(d?.day_number)) ? Math.round(Number(d.day_number)) : i + 1,
+          date: String(d?.date ?? dateAtOffset(data.startDate, i)).slice(0, 10),
+          city: String(d?.city ?? "").slice(0, 80).trim(),
+          phase: ALLOWED_PHASES.has(String(d?.phase)) ? String(d.phase) : "transit",
+          summary: String(d?.summary ?? "").slice(0, 400),
+        }))
+        .filter((d: ProposedDay) => Boolean(d.city));
+
+      // Normaliza: ordena por day_number e força preencher todos os dias
+      days.sort((a, b) => a.day_number - b.day_number);
+      if (days.length !== totalDays) {
+        // Tenta preencher / truncar para encaixar
+        const fill: ProposedDay[] = [];
+        for (let i = 0; i < totalDays; i++) {
+          const src = days[i] ?? days[days.length - 1];
+          fill.push({
+            day_number: i + 1,
+            date: dateAtOffset(data.startDate, i),
+            city: src?.city ?? "Tóquio",
+            phase: i === 0 ? "arrival" : i === totalDays - 1 ? "departure" : src?.phase ?? "transit",
+            summary: src?.summary ?? "",
+          });
+        }
+        days = fill;
+      } else {
+        days = days.map((d, i) => ({ ...d, day_number: i + 1, date: dateAtOffset(data.startDate, i) }));
+        days[0].phase = "arrival";
+        days[days.length - 1].phase = "departure";
+      }
+
+      const rawCities = Array.isArray(parsed?.cities) ? parsed.cities : [];
+      const cities: ProposedCity[] = rawCities
+        .map((c: any): ProposedCity => ({
+          city: String(c?.city ?? "").slice(0, 80).trim(),
+          lat: Number(c?.lat),
+          lng: Number(c?.lng),
+          region: String(c?.region ?? "").slice(0, 40),
+        }))
+        .filter((c: ProposedCity) =>
+          Boolean(c.city) &&
+          Number.isFinite(c.lat) && c.lat >= 24 && c.lat <= 46 &&
+          Number.isFinite(c.lng) && c.lng >= 122 && c.lng <= 146,
+        );
+
+      const rationale = String(parsed?.rationale ?? "").slice(0, 600);
+      return { days, cities, rationale, error: null };
+    } catch (e) {
+      console.error("[regenerateItinerary]", e);
+      const msg = e instanceof Error ? e.message : "Falha na regeneração";
+      return { days: [], cities: [], rationale: "", error: msg.slice(0, 200) };
+    }
+  });

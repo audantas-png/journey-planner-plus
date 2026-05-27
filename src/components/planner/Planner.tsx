@@ -869,12 +869,11 @@ function Budget({ budget, expenses, fxRate }: { budget: BudgetCategory[]; expens
                   </div>
                 </div>
                 <div className="flex flex-col items-start gap-3 md:items-end">
-                  <div className="flex items-center gap-2">
-                    <input type="number" defaultValue={planned}
-                      onBlur={e => { const v = Number(e.target.value); if (v !== planned) updatePlanned(cat.id, v); }}
-                      className="w-28 bg-transparent border border-foreground/15 px-3 py-2 text-right text-sm tabular outline-none focus:border-foreground" />
-                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">JPY</span>
-                  </div>
+                  <PlannedAmountEditor
+                    plannedJpy={planned}
+                    rates={rates}
+                    onSave={(jpy) => updatePlanned(cat.id, jpy)}
+                  />
                   <button type="button" onClick={() => setAdding(adding === cat.id ? null : cat.id)}
                     className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground hover:border-foreground/40 hover:text-foreground">
                     <Plus className="w-3 h-3" /> add

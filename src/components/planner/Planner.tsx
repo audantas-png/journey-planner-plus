@@ -1039,8 +1039,12 @@ function ExpenseForm({
   const toJpy = (raw: number): number => {
     if (!Number.isFinite(raw)) return 0;
     if (cur === "JPY") return Math.round(raw);
-    if (cur === "BRL") return Math.round(raw / (rates.jpyBrl || 0.038));
-    return Math.round(raw / (rates.jpyUsd || 0.0064));
+    // O gasto em BRL/USD já representa o valor cobrado no cartão brasileiro
+    // (spot + IOF). Para converter de volta a JPY corretamente, usamos a
+    // taxa efetiva COM IOF — assim o round-trip JPY → BRL bate.
+    const iof = 1 + IOF_RATE;
+    if (cur === "BRL") return Math.round(raw / ((rates.jpyBrl || 0.038) * iof));
+    return Math.round(raw / ((rates.jpyUsd || 0.0064) * iof));
   };
 
   const preview = toJpy(Number(amt));

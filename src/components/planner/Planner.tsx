@@ -1114,3 +1114,84 @@ function NewCategoryForm({ onAdd }: { onAdd: (name: string, planned: number) => 
     </form>
   );
 }
+
+function PlannedAmountEditor({
+  plannedJpy,
+  rates,
+  onSave,
+}: {
+  plannedJpy: number;
+  rates: { jpyBrl: number; jpyUsd: number };
+  onSave: (jpy: number) => void;
+}) {
+  const [cur, setCur] = useState<Currency>("JPY");
+  const iof = 1 + IOF_RATE;
+
+  const toDisplay = (jpy: number): string => {
+    if (cur === "JPY") return String(Math.round(jpy));
+    if (cur === "BRL") return (jpy * (rates.jpyBrl || 0.038) * iof).toFixed(2);
+    return (jpy * (rates.jpyUsd || 0.0064) * iof).toFixed(2);
+  };
+
+  const toJpy = (raw: number): number => {
+    if (!Number.isFinite(raw)) return 0;
+    if (cur === "JPY") return Math.round(raw);
+    if (cur === "BRL") return Math.round(raw / ((rates.jpyBrl || 0.038) * iof));
+    return Math.round(raw / ((rates.jpyUsd || 0.0064) * iof));
+  };
+
+  const [value, setValue] = useState<string>(() => toDisplay(plannedJpy));
+
+  // Sync when currency changes or external planned changes.
+  const lastKey = useMemo(() => `${cur}:${plannedJpy}`, [cur, plannedJpy]);
+  const [seenKey, setSeenKey] = useState(lastKey);
+  if (seenKey !== lastKey) {
+    setSeenKey(lastKey);
+    setValue(toDisplay(plannedJpy));
+  }
+
+  const commit = () => {
+    const jpy = toJpy(Number(value));
+    if (jpy !== plannedJpy) onSave(jpy);
+  };
+
+  const symbol = cur === "JPY" ? "¥" : cur === "BRL" ? "R$" : "US$";
+  const previewJpy = toJpy(Number(value));
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <div className="inline-flex border border-foreground/15 overflow-hidden h-9">
+          {(["JPY","BRL","USD"] as Currency[]).map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCur(c)}
+              className={`px-2 font-mono text-[10px] uppercase tracking-widest ${cur === c ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground pointer-events-none">{symbol}</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step={cur === "JPY" ? "1" : "0.01"}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            className="w-32 bg-transparent border border-foreground/15 pl-8 pr-2 py-2 text-right text-sm tabular outline-none focus:border-foreground"
+          />
+        </div>
+      </div>
+      {cur !== "JPY" && previewJpy > 0 && (
+        <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground tabular">
+          ≈ ¥{previewJpy.toLocaleString("ja-JP")}
+        </span>
+      )}
+    </div>
+  );
+}

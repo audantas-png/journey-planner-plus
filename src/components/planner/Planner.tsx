@@ -443,10 +443,6 @@ function SanityCheck({ days }: { days: TripDay[] }) {
 }
 
 function SectionTitle({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
-  return SectionTitleImpl({ eyebrow, title, sub });
-}
-
-function SectionTitleImpl({ eyebrow, title, sub }: { eyebrow: string; title: string; sub?: string }) {
   return (
     <div className="mb-6 flex items-end justify-between gap-6 flex-wrap border-b border-foreground/15 pb-3">
       <div>

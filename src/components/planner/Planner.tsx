@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { analyzeItinerary } from "@/lib/planner.functions";
+import { regenerateItinerary, type ProposedDay, type ProposedCity } from "@/lib/planner.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { TripMap } from "./Map";
 import { Activities } from "./Activities";

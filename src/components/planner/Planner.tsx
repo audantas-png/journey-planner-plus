@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { analyzeItinerary } from "@/lib/planner.functions";
+import { regenerateItinerary, type ProposedDay, type ProposedCity } from "@/lib/planner.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { TripMap } from "./Map";
 import { Activities } from "./Activities";
@@ -315,6 +316,9 @@ function Overview({ days, acts, budget, expenses, daysLeft, fxRate, tripStart, t
 
       {/* Sanity Check via IA */}
       <SanityCheck days={days} />
+
+      {/* Reroteirizador via IA */}
+      <Reroute days={days} tripStart={tripStart} tripEnd={tripEnd} />
     </div>
   );
 }
@@ -1112,6 +1116,236 @@ function NewCategoryForm({ onAdd }: { onAdd: (name: string, planned: number) => 
       </Button>
       <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground text-lg leading-none px-1">×</button>
     </form>
+  );
+}
+
+// ============ REROTEIRIZADOR (IA) ============
+function Reroute({ days, tripStart, tripEnd }: { days: TripDay[]; tripStart: Date; tripEnd: Date }) {
+  const currentCount = useMemo(() => {
+    const uniq: string[] = [];
+    for (const d of days) if (uniq[uniq.length - 1] !== d.city) uniq.push(d.city);
+    return uniq.length;
+  }, [days]);
+
+  const [target, setTarget] = useState<number>(Math.max(4, currentCount));
+  const [notes, setNotes] = useState("");
+  const [mustInclude, setMustInclude] = useState("Tóquio");
+  const [proposed, setProposed] = useState<{ days: ProposedDay[]; cities: ProposedCity[]; rationale: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+  const qc = useQueryClient();
+  const call = useServerFn(regenerateItinerary);
+
+  const startStr = tripStart.toISOString().slice(0, 10);
+  const endStr = tripEnd.toISOString().slice(0, 10);
+
+  async function generate() {
+    setLoading(true); setErr(null); setProposed(null);
+    try {
+      const must = mustInclude.split(",").map(s => s.trim()).filter(Boolean);
+      const res = await call({ data: { targetCities: target, startDate: startStr, endDate: endStr, mustInclude: must, notes: notes.trim() || undefined } });
+      if (res.error) { setErr(res.error); return; }
+      if (!res.days.length) { setErr("Resposta vazia da IA."); return; }
+      setProposed({ days: res.days, cities: res.cities, rationale: res.rationale });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message.slice(0, 200) : "Falha ao gerar.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function apply() {
+    if (!proposed) return;
+    if (!confirm(`Substituir o roteiro atual por ${proposed.days.length} dias em ${new Set(proposed.days.map(d => d.city)).size} cidades?\n\nAtividades e checklists vinculadas a dias serão apagadas. Esta ação não pode ser desfeita.`)) return;
+    setApplying(true);
+    try {
+      // 1) Apaga dependências (RLS permite a usuários autenticados)
+      await supabase.from("day_activities").delete().not("id", "is", null);
+      await supabase.from("checklist_items").delete().not("day_id", "is", null);
+      // 2) Apaga dias antigos
+      const { error: delErr } = await supabase.from("trip_days").delete().not("id", "is", null);
+      if (delErr) throw delErr;
+      // 3) Insere novos dias
+      const rows = proposed.days.map((d, i) => ({
+        day_number: d.day_number,
+        date: d.date,
+        city: d.city,
+        phase: d.phase,
+        summary: d.summary,
+        position: i + 1,
+      }));
+      const { error: insErr } = await supabase.from("trip_days").insert(rows);
+      if (insErr) throw insErr;
+      // 4) Upsert city_geo (insere apenas cidades inexistentes)
+      if (proposed.cities.length) {
+        const { data: existing } = await supabase.from("city_geo").select("city");
+        const known = new Set((existing ?? []).map((r: any) => r.city));
+        const toInsert = proposed.cities.filter(c => !known.has(c.city));
+        if (toInsert.length) {
+          await supabase.from("city_geo").insert(toInsert);
+        }
+      }
+      qc.invalidateQueries({ queryKey: ["days"] });
+      qc.invalidateQueries({ queryKey: ["acts"] });
+      qc.invalidateQueries({ queryKey: ["checklist"] });
+      qc.invalidateQueries({ queryKey: ["geo"] });
+      toast.success("Roteiro substituído. Atividades e análises serão recalculadas.");
+      setProposed(null);
+    } catch (e) {
+      console.error(e);
+      toast.error("Não foi possível aplicar o novo roteiro.");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return (
+    <section>
+      <div className="mb-6 flex items-end justify-between gap-6 flex-wrap border-b border-foreground/15 pb-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground inline-flex items-center gap-2">
+            <Wand2 className="w-3 h-3 text-accent" /> § Reroteirizar com IA
+          </div>
+          <h2 className="font-serif text-3xl mt-1 leading-none">Refazer a travessia</h2>
+        </div>
+        <p className="text-xs text-muted-foreground max-w-md leading-relaxed">
+          Ajuste o número de paradas. A IA propõe uma nova sequência terrestre e, ao aplicar, todas as outras seções (atividades, sanity check, mapa) se adaptam.
+        </p>
+      </div>
+
+      <div className="grid lg:grid-cols-[320px_1fr] gap-6">
+        {/* Controles */}
+        <aside className="border border-foreground/15 p-6 space-y-5">
+          <div>
+            <div className="flex items-baseline justify-between">
+              <label className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Cidades</label>
+              <span className="font-serif text-4xl tabular leading-none">{target}</span>
+            </div>
+            <input type="range" min={3} max={20} value={target}
+              onChange={e => setTarget(Number(e.target.value))}
+              className="w-full mt-3 accent-accent" />
+            <div className="flex justify-between font-mono text-[9px] tabular text-muted-foreground mt-1">
+              <span>3 (lento, profundo)</span>
+              <span>20 (corrida)</span>
+            </div>
+            <div className="font-mono text-[10px] text-muted-foreground mt-2">
+              Hoje: <span className="text-foreground tabular">{currentCount}</span> cidades em {days.length} dias.
+            </div>
+          </div>
+
+          <div>
+            <label className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Obrigatórias</label>
+            <Input value={mustInclude} onChange={e => setMustInclude(e.target.value)}
+              placeholder="Tóquio, Kyoto"
+              className="mt-2 rounded-none border-foreground/20 bg-transparent h-8 text-sm" />
+            <div className="font-mono text-[9px] text-muted-foreground mt-1">separe por vírgulas</div>
+          </div>
+
+          <div>
+            <label className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Preferências</label>
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="ex: priorizar onsen, evitar megalópoles, koyo no auge…"
+              rows={3}
+              className="mt-2 rounded-none border-foreground/20 bg-transparent text-sm resize-none" />
+          </div>
+
+          <Button
+            type="button"
+            onClick={generate}
+            disabled={loading}
+            className="w-full rounded-none bg-foreground text-background h-10 font-mono text-[10px] uppercase tracking-[0.25em] hover:bg-foreground/90"
+          >
+            {loading ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Wand2 className="w-3 h-3 mr-2" />}
+            {loading ? "Gerando proposta…" : "Gerar proposta"}
+          </Button>
+
+          {err && (
+            <div className="border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">{err}</div>
+          )}
+        </aside>
+
+        {/* Preview */}
+        <div className="border border-foreground/15 p-6 min-h-[300px]">
+          {!proposed && !loading && (
+            <div className="text-center text-sm text-muted-foreground py-20">
+              <Wand2 className="w-6 h-6 mx-auto mb-3 opacity-40" />
+              Configure os parâmetros e clique em <span className="text-foreground">Gerar proposta</span>.
+            </div>
+          )}
+          {loading && (
+            <div className="text-center text-sm text-muted-foreground py-20">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-3" />
+              Desenhando travessia…
+            </div>
+          )}
+          {proposed && (
+            <div className="space-y-5">
+              <div className="border-l-2 border-accent pl-3">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-accent">Lógica da rota</div>
+                <p className="text-sm text-foreground/85 mt-1 leading-relaxed">{proposed.rationale || "—"}</p>
+              </div>
+
+              {/* Strip de cidades */}
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Sequência ({new Set(proposed.days.map(d => d.city)).size} cidades · {proposed.days.length} dias)</div>
+                <div className="flex flex-wrap gap-1 items-center">
+                  {(() => {
+                    const seq: { city: string; count: number }[] = [];
+                    for (const d of proposed.days) {
+                      const last = seq[seq.length - 1];
+                      if (last && last.city === d.city) last.count++;
+                      else seq.push({ city: d.city, count: 1 });
+                    }
+                    return seq.map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1">
+                        <span className="px-2 py-1 border border-foreground/20 font-mono text-[10px] tabular">
+                          {s.city} <span className="text-muted-foreground">·{s.count}d</span>
+                        </span>
+                        {i < seq.length - 1 && <Train className="w-3 h-3 text-accent/50" />}
+                      </span>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              {/* Lista de dias */}
+              <div className="border-t border-foreground/10 pt-4">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Diário</div>
+                <ul className="space-y-1 max-h-[320px] overflow-y-auto pr-2">
+                  {proposed.days.map(d => {
+                    const p = PHASES[d.phase] ?? PHASES.tokyo;
+                    return (
+                      <li key={d.day_number} className="grid grid-cols-[40px_80px_120px_1fr] gap-3 items-baseline text-xs py-1 border-b border-foreground/5">
+                        <span className="font-mono tabular text-muted-foreground">D{String(d.day_number).padStart(2,"0")}</span>
+                        <span className="font-mono tabular text-muted-foreground">{d.date.slice(5)}</span>
+                        <span className="font-serif text-sm" style={{ color: p.color }}>{d.city}</span>
+                        <span className="text-muted-foreground leading-snug">{d.summary}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3 border-t border-foreground/10">
+                <Button type="button" onClick={apply} disabled={applying}
+                  className="rounded-none bg-accent text-background h-10 font-mono text-[10px] uppercase tracking-[0.25em] hover:bg-accent/90">
+                  {applying ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Check className="w-3 h-3 mr-2" />}
+                  {applying ? "Aplicando…" : "Aplicar novo roteiro"}
+                </Button>
+                <button type="button" onClick={() => setProposed(null)}
+                  className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">
+                  Descartar
+                </button>
+                <span className="ml-auto font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
+                  ⚠ apaga atividades e checklists vinculadas a dias
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

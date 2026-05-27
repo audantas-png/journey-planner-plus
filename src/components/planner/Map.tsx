@@ -51,7 +51,7 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
         center={[36.5, 138]}
         zoom={5}
         minZoom={5}
-        maxZoom={10}
+        maxZoom={18}
         maxBounds={JAPAN_BOUNDS}
         maxBoundsViscosity={1.0}
         worldCopyJump={false}
@@ -63,6 +63,7 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
           subdomains="abcd"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
+          maxZoom={20}
         />
         <TileLayer
           attribution=''
@@ -71,6 +72,17 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
           bounds={JAPAN_BOUNDS}
           noWrap={true}
           pane="markerPane"
+          maxZoom={20}
+        />
+        {/* Overlay ferroviário e de metrô (OpenRailwayMap) */}
+        <TileLayer
+          attribution='&copy; OpenRailwayMap contributors'
+          url="https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png"
+          subdomains="abc"
+          bounds={JAPAN_BOUNDS}
+          noWrap={true}
+          opacity={0.85}
+          maxZoom={19}
         />
         <Polyline positions={path} pathOptions={{ color: "#9B2C2C", weight: 2, dashArray: "6 4" }} />
         {Array.from(new Set(points.map(p => p.g.city))).map(city => {

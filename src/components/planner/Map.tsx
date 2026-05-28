@@ -57,15 +57,22 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
         worldCopyJump={false}
         style={{ height: "100%", width: "100%", background: "var(--background)" }}
       >
-        {/* Base detalhada em inglês — GSI Japan (oficial, mostra estações, ruas, POIs) */}
-        {/* Invertida via CSS para combinar com o tema dark */}
+        {/* Base dark detalhada — Esri World Dark Gray (sem rótulos) */}
         <TileLayer
-          attribution='&copy; <a href="https://www.gsi.go.jp/">GSI Japan</a>'
-          url="https://cyberjapandata.gsi.go.jp/xyz/english/{z}/{x}/{y}.png"
+          attribution='Tiles &copy; Esri'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
-          maxZoom={18}
-          className="gsi-dark-tiles"
+          maxZoom={16}
+        />
+        {/* Rótulos em inglês — Esri Reference */}
+        <TileLayer
+          attribution=''
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+          bounds={JAPAN_BOUNDS}
+          noWrap={true}
+          maxZoom={16}
+          pane="markerPane"
         />
         {/* Overlay ferroviário e de metrô (OpenRailwayMap) */}
         <TileLayer

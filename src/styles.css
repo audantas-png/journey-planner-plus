@@ -206,4 +206,9 @@
     color: var(--foreground) !important;
     border-color: var(--border) !important;
   }
+
+  /* GSI Japan tiles vêm claras — invertemos para harmonizar com dark mode */
+  .dark .gsi-dark-tiles {
+    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.95) saturate(0.7);
+  }
 }

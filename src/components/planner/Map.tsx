@@ -57,31 +57,24 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
         worldCopyJump={false}
         style={{ height: "100%", width: "100%", background: "var(--background)" }}
       >
+        {/* Base detalhada em inglês — GSI Japan (oficial, mostra estações, ruas, POIs) */}
+        {/* Invertida via CSS para combinar com o tema dark */}
         <TileLayer
-          attribution='&copy; OpenStreetMap &copy; CARTO'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
+          attribution='&copy; <a href="https://www.gsi.go.jp/">GSI Japan</a>'
+          url="https://cyberjapandata.gsi.go.jp/xyz/english/{z}/{x}/{y}.png"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
-          maxZoom={20}
-        />
-        <TileLayer
-          attribution=''
-          url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
-          bounds={JAPAN_BOUNDS}
-          noWrap={true}
-          pane="markerPane"
-          maxZoom={20}
+          maxZoom={18}
+          className="gsi-dark-tiles"
         />
         {/* Overlay ferroviário e de metrô (OpenRailwayMap) */}
         <TileLayer
-          attribution='&copy; OpenRailwayMap contributors'
+          attribution='&copy; OpenRailwayMap'
           url="https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png"
           subdomains="abc"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
-          opacity={0.85}
+          opacity={0.9}
           maxZoom={19}
         />
         <Polyline positions={path} pathOptions={{ color: "#9B2C2C", weight: 2, dashArray: "6 4" }} />

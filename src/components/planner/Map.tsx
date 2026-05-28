@@ -74,16 +74,6 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
           maxZoom={16}
           pane="markerPane"
         />
-        {/* Overlay ferroviário e de metrô (OpenRailwayMap) */}
-        <TileLayer
-          attribution='&copy; OpenRailwayMap'
-          url="https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png"
-          subdomains="abc"
-          bounds={JAPAN_BOUNDS}
-          noWrap={true}
-          opacity={0.9}
-          maxZoom={19}
-        />
         <Polyline positions={path} pathOptions={{ color: "#9B2C2C", weight: 2, dashArray: "6 4" }} />
         {Array.from(new Set(points.map(p => p.g.city))).map(city => {
           const g = geoMap.get(city)!;

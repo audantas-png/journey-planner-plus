@@ -63,7 +63,8 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
-          maxZoom={16}
+          maxZoom={20}
+          maxNativeZoom={16}
         />
         {/* Rótulos em inglês — Esri Reference */}
         <TileLayer
@@ -71,7 +72,8 @@ export function TripMap({ days, geo }: { days: TripDay[]; geo: CityGeo[] }) {
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
           bounds={JAPAN_BOUNDS}
           noWrap={true}
-          maxZoom={16}
+          maxZoom={20}
+          maxNativeZoom={16}
           pane="markerPane"
         />
         <Polyline positions={path} pathOptions={{ color: "#9B2C2C", weight: 2, dashArray: "6 4" }} />

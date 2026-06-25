@@ -324,3 +324,181 @@ Responda APENAS com este JSON:
       return { days: [], cities: [], rationale: "", error: msg.slice(0, 200) };
     }
   });
+
+// ============================================================
+// BUSCA DE OFERTAS — hotéis + ingressos com fallback resiliente
+// ============================================================
+
+const DealsInput = z.object({
+  city: z.string().min(1).max(80),
+  checkin: z.string().min(8).max(20).optional(),
+  checkout: z.string().min(8).max(20).optional(),
+  nights: z.number().int().min(1).max(30).optional(),
+});
+
+export type HotelDeal = {
+  name: string;
+  area: string;
+  approx_jpy_per_night: number;
+  why: string;
+  booking_url: string;
+  google_hotels_url: string;
+};
+
+export type TicketDeal = {
+  name: string;
+  approx_jpy: number;
+  why: string;
+  klook_url: string;
+  gyg_url: string;
+};
+
+const enc = (s: string) => encodeURIComponent(s);
+
+function buildBookingUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
+  const ss = area ? `${area}, ${city}, Japan` : `${city}, Japan`;
+  const params = new URLSearchParams({ ss, order: "price", group_adults: "2", no_rooms: "1" });
+  if (checkin) params.set("checkin", checkin);
+  if (checkout) params.set("checkout", checkout);
+  return `https://www.booking.com/searchresults.html?${params.toString()}`;
+}
+
+function buildGoogleHotelsUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
+  const q = area ? `hotels in ${area}, ${city}, Japan` : `hotels in ${city}, Japan`;
+  let url = `https://www.google.com/travel/hotels?q=${enc(q)}`;
+  if (checkin && checkout) url += `&checkin=${checkin}&checkout=${checkout}`;
+  return url;
+}
+
+function buildKlookUrl(query: string) {
+  return `https://www.klook.com/search/result/?keyword=${enc(query)}`;
+}
+
+function buildGygUrl(query: string) {
+  return `https://www.getyourguide.com/s/?q=${enc(query)}`;
+}
+
+function fallbackDeals(city: string, checkin?: string, checkout?: string) {
+  const hotels: HotelDeal[] = [
+    {
+      name: `Hotéis econômicos perto da estação central de ${city}`,
+      area: `Estação Central / Downtown`,
+      approx_jpy_per_night: 0,
+      why: "Busca direta ordenada por preço — ideal próximo à JR para mobilidade.",
+      booking_url: buildBookingUrl(city, "Station", checkin, checkout),
+      google_hotels_url: buildGoogleHotelsUrl(city, "Station", checkin, checkout),
+    },
+    {
+      name: `Cápsula / business hotel em ${city}`,
+      area: "Centro",
+      approx_jpy_per_night: 0,
+      why: "Categorias mais baratas no Japão: cápsula (¥3-6k) e business (¥7-12k).",
+      booking_url: buildBookingUrl(city, undefined, checkin, checkout) + "&nflt=ht_id%3D204%3Bht_id%3D203",
+      google_hotels_url: buildGoogleHotelsUrl(city, undefined, checkin, checkout),
+    },
+    {
+      name: `Ryokan tradicional em ${city}`,
+      area: "Bairros históricos",
+      approx_jpy_per_night: 0,
+      why: "Hospedagem cultural com tatami, futon e (em onsen towns) banhos termais.",
+      booking_url: buildBookingUrl(city, "Ryokan", checkin, checkout),
+      google_hotels_url: buildGoogleHotelsUrl(city, "Ryokan", checkin, checkout),
+    },
+  ];
+  const tickets: TicketDeal[] = [
+    {
+      name: `Principais atrações de ${city}`,
+      approx_jpy: 0,
+      why: "Catálogo completo de tours, ingressos e experiências locais.",
+      klook_url: buildKlookUrl(`${city} Japan`),
+      gyg_url: buildGygUrl(`${city} Japan`),
+    },
+    {
+      name: `Day tours saindo de ${city}`,
+      approx_jpy: 0,
+      why: "Bate-volta guiados — útil para regiões sem trem direto.",
+      klook_url: buildKlookUrl(`${city} day tour`),
+      gyg_url: buildGygUrl(`${city} day trip`),
+    },
+  ];
+  return { hotels, tickets };
+}
+
+export const searchDeals = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => DealsInput.parse(input))
+  .handler(async ({ data }) => {
+    const fb = fallbackDeals(data.city, data.checkin, data.checkout);
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) {
+      return { hotels: fb.hotels, tickets: fb.tickets, usedFallback: true, error: "IA indisponível — exibindo buscas diretas." };
+    }
+    try {
+      const gateway = createLovableAiGatewayProvider(key);
+      const nights = data.nights ?? 2;
+      const { text } = await generateText({
+        model: gateway("google/gemini-2.5-flash"),
+        system: `Você é um curador de viagens no Japão. Devolva SOMENTE JSON válido, sem markdown.`,
+        prompt: `Cidade: ${data.city}
+Check-in: ${data.checkin ?? "flexível"} · Check-out: ${data.checkout ?? "flexível"} · Noites: ${nights}
+
+Sugira:
+- 4 hotéis reais e BARATOS (cápsula, business, ryokan econômico, hostel boutique) em bairros estratégicos perto de estações JR/metrô.
+- 4 ingressos/experiências reais (templos, parques, museus, day tours) com preço aproximado.
+
+Para cada item, retorne preço médio em JPY (por noite para hotel, por pessoa para ingresso). Use conhecimento real — não invente nomes.
+
+JSON:
+{
+  "hotels": [
+    { "name": "string", "area": "bairro/estação", "approx_jpy_per_night": número, "why": "1 frase em pt-BR" }
+  ],
+  "tickets": [
+    { "name": "string", "approx_jpy": número, "why": "1 frase em pt-BR" }
+  ]
+}`,
+      });
+      const parsed = extractJson(text);
+      const rawHotels = Array.isArray(parsed?.hotels) ? parsed.hotels : [];
+      const rawTickets = Array.isArray(parsed?.tickets) ? parsed.tickets : [];
+
+      const hotels: HotelDeal[] = rawHotels.map((h: any): HotelDeal => {
+        const name = String(h?.name ?? "").slice(0, 160).trim();
+        const area = String(h?.area ?? "").slice(0, 80).trim();
+        return {
+          name,
+          area,
+          approx_jpy_per_night: Number.isFinite(Number(h?.approx_jpy_per_night)) ? Math.max(0, Math.round(Number(h.approx_jpy_per_night))) : 0,
+          why: String(h?.why ?? "").slice(0, 240),
+          booking_url: buildBookingUrl(data.city, area || name, data.checkin, data.checkout),
+          google_hotels_url: buildGoogleHotelsUrl(data.city, name || area, data.checkin, data.checkout),
+        };
+      }).filter((h: HotelDeal) => Boolean(h.name));
+
+      const tickets: TicketDeal[] = rawTickets.map((t: any): TicketDeal => {
+        const name = String(t?.name ?? "").slice(0, 160).trim();
+        return {
+          name,
+          approx_jpy: Number.isFinite(Number(t?.approx_jpy)) ? Math.max(0, Math.round(Number(t.approx_jpy))) : 0,
+          why: String(t?.why ?? "").slice(0, 240),
+          klook_url: buildKlookUrl(`${name} ${data.city}`),
+          gyg_url: buildGygUrl(`${name} ${data.city}`),
+        };
+      }).filter((t: TicketDeal) => Boolean(t.name));
+
+      if (!hotels.length && !tickets.length) {
+        return { hotels: fb.hotels, tickets: fb.tickets, usedFallback: true, error: "IA retornou vazio — usando buscas diretas." };
+      }
+      return { hotels, tickets, usedFallback: false, error: null as string | null };
+    } catch (e) {
+      console.error("[searchDeals]", e);
+      const msg = e instanceof Error ? e.message : "Falha na busca";
+      const credit = /402|credit|quota|rate/i.test(msg);
+      return {
+        hotels: fb.hotels,
+        tickets: fb.tickets,
+        usedFallback: true,
+        error: credit ? "Créditos de IA esgotados — exibindo buscas diretas." : "IA indisponível — exibindo buscas diretas.",
+      };
+    }
+  });

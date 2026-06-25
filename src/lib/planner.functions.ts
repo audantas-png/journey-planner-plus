@@ -358,16 +358,23 @@ const enc = (s: string) => encodeURIComponent(s);
 function buildBookingUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
   const ss = area ? `${area}, ${city}, Japan` : `${city}, Japan`;
   const params = new URLSearchParams({ ss, order: "price", group_adults: "2", no_rooms: "1" });
+  // nflt: hotelfacility=continental breakfast (8) + breakfast included (board=1) + price low
+  params.set("nflt", "mealplan=1;review_score=70");
   if (checkin) params.set("checkin", checkin);
   if (checkout) params.set("checkout", checkout);
   return `https://www.booking.com/searchresults.html?${params.toString()}`;
 }
 
 function buildGoogleHotelsUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
-  const q = area ? `hotels in ${area}, ${city}, Japan` : `hotels in ${city}, Japan`;
-  let url = `https://www.google.com/travel/hotels?q=${enc(q)}`;
-  if (checkin && checkout) url += `&checkin=${checkin}&checkout=${checkout}`;
-  return url;
+  const where = area ? `${area}, ${city}, Japan` : `${city}, Japan`;
+  // Embed budget + breakfast preferences directly in the query text — Google Hotels
+  // parses these as soft filters even when URL params are ignored.
+  const q = `budget hotels with breakfast included in ${where}`;
+  const params = new URLSearchParams({ q, hl: "en" });
+  if (checkin) params.set("checkin", checkin);
+  if (checkout) params.set("checkout", checkout);
+  // /travel/search honors checkin/checkout query params more reliably than /travel/hotels
+  return `https://www.google.com/travel/search?${params.toString()}`;
 }
 
 function buildKlookUrl(query: string) {

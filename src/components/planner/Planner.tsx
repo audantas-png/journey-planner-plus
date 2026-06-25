@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TripMap } from "./Map";
 import { Activities } from "./Activities";
 import { Packing } from "./Packing";
+import { Deals } from "./Deals";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
   fetchChecklist, fetchGeo, fetchFxRate, fetchFxMulti, fxRateWithIof, IOF_RATE, PHASES,
@@ -20,7 +21,7 @@ import { toast } from "sonner";
 import {
   ChevronDown, Plus, Check, MapPin, ExternalLink, LogOut, Trash2,
   Compass, CalendarDays, Map as MapIcon, Sparkles, Wallet, Train,
-  AlertTriangle, ShieldAlert, Info, Loader2, Wand2, Luggage,
+  AlertTriangle, ShieldAlert, Info, Loader2, Wand2, Luggage, Tag,
 } from "lucide-react";
 
 const fmtBRL = (v: number) => "R$ " + Math.round(v).toLocaleString("pt-BR");
@@ -31,7 +32,7 @@ export function Planner() {
   return <PlannerApp />;
 }
 
-type Tab = "overview" | "itinerary" | "map" | "activities" | "budget" | "packing";
+type Tab = "overview" | "itinerary" | "map" | "activities" | "budget" | "packing" | "deals";
 
 function PlannerApp() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -58,6 +59,7 @@ function PlannerApp() {
     { id: "activities", label: "Atividades", num: "04", Icon: Sparkles },
     { id: "budget", label: "Orçamento", num: "05", Icon: Wallet },
     { id: "packing", label: "Bagagem & Compras", num: "06", Icon: Luggage },
+    { id: "deals", label: "Ofertas", num: "07", Icon: Tag },
   ];
 
   const activeTab = tabs.find(t => t.id === tab)!;
@@ -148,6 +150,7 @@ function PlannerApp() {
         )}
         {tab === "budget" && <Budget budget={budget.data ?? []} expenses={expenses.data ?? []} fxRate={fxRate} />}
         {tab === "packing" && <Packing items={checklist.data ?? []} />}
+        {tab === "deals" && <Deals days={days.data ?? []} />}
       </main>
 
       <footer className="border-t border-foreground/15 mt-20">

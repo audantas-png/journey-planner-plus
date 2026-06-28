@@ -367,15 +367,14 @@ function buildBookingUrl(city: string, area: string | undefined, checkin?: strin
 
 function buildGoogleHotelsUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
   const where = area ? `${area}, ${city}, Japan` : `${city}, Japan`;
-  // Google Hotels reliably honors check-in/out only when encoded in the URL
-  // hash as `;c=YYYY-MM-DD;d=YYYY-MM-DD` on the /travel/hotels endpoint.
-  const q = `budget hotels with breakfast included in ${where}`;
+  // Google Hotels ignores checkin/checkout query params on /travel/search and
+  // the URL fragment isn't sent server-side. The only reliable trick: embed
+  // the dates directly in the natural-language query — Google parses
+  // "from YYYY-MM-DD to YYYY-MM-DD" and applies them as the stay window.
+  const dateClause = checkin && checkout ? ` from ${checkin} to ${checkout}` : "";
+  const q = `budget hotels with breakfast included in ${where}${dateClause}`;
   const params = new URLSearchParams({ q, hl: "en" });
-  const base = `https://www.google.com/travel/hotels?${params.toString()}`;
-  if (checkin && checkout) {
-    return `${base}#search;c=${checkin};d=${checkout};mp=1`;
-  }
-  return base;
+  return `https://www.google.com/travel/search?${params.toString()}`;
 }
 
 function buildKlookUrl(query: string) {

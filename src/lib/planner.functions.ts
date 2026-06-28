@@ -355,6 +355,37 @@ export type TicketDeal = {
 
 const enc = (s: string) => encodeURIComponent(s);
 
+function googleHotelsTs(checkin?: string, checkout?: string, currency = "BRL", adults = 2) {
+  if (!checkin || !checkout) return null;
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(checkin) || !dateRe.test(checkout)) return null;
+
+  const varint = (value: number) => {
+    const bytes: number[] = [];
+    let n = value;
+    while (n > 127) {
+      bytes.push((n & 0x7f) | 0x80);
+      n = Math.floor(n / 128);
+    }
+    bytes.push(n);
+    return bytes;
+  };
+  const fieldVar = (field: number, value: number) => [(field << 3) | 0, ...varint(value)];
+  const fieldLen = (field: number, value: number[]) => [(field << 3) | 2, ...varint(value.length), ...value];
+  const dateField = (iso: string) => {
+    const [year, month, day] = iso.split("-").map(Number);
+    return [...fieldVar(1, year), ...fieldVar(2, month), ...fieldVar(3, day)];
+  };
+
+  const dates = [...fieldLen(1, dateField(checkin)), ...fieldLen(2, dateField(checkout))];
+  const guests = fieldLen(6, fieldVar(1, adults));
+  const trip = fieldLen(3, fieldLen(2, [...dates, ...guests]));
+  const money = fieldLen(5, fieldLen(1, [58, currency.length, ...Array.from(currency, c => c.charCodeAt(0))]));
+  const payload = [...fieldVar(1, 0), ...trip, ...money];
+
+  return globalThis.btoa(String.fromCharCode(...payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 function buildBookingUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
   const ss = area ? `${area}, ${city}, Japan` : `${city}, Japan`;
   const params = new URLSearchParams({ ss, order: "price", group_adults: "2", no_rooms: "1" });
@@ -367,13 +398,10 @@ function buildBookingUrl(city: string, area: string | undefined, checkin?: strin
 
 function buildGoogleHotelsUrl(city: string, area: string | undefined, checkin?: string, checkout?: string) {
   const where = area ? `${area}, ${city}, Japan` : `${city}, Japan`;
-  // Google Hotels ignores checkin/checkout query params on /travel/search and
-  // the URL fragment isn't sent server-side. The only reliable trick: embed
-  // the dates directly in the natural-language query — Google parses
-  // "from YYYY-MM-DD to YYYY-MM-DD" and applies them as the stay window.
-  const dateClause = checkin && checkout ? ` from ${checkin} to ${checkout}` : "";
-  const q = `budget hotels with breakfast included in ${where}${dateClause}`;
-  const params = new URLSearchParams({ q, hl: "en" });
+  const q = `budget hotels with breakfast included in ${where}`;
+  const params = new URLSearchParams({ q, hl: "en", gl: "BR", currency: "BRL" });
+  const ts = googleHotelsTs(checkin, checkout, "BRL", 2);
+  if (ts) params.set("ts", ts);
   return `https://www.google.com/travel/search?${params.toString()}`;
 }
 

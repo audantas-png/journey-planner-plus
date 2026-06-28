@@ -379,7 +379,7 @@ function googleHotelsTs(checkin?: string, checkout?: string, currency = "BRL", a
 
   const dates = [...fieldLen(1, dateField(checkin)), ...fieldLen(2, dateField(checkout))];
   const guests = fieldLen(6, fieldVar(1, adults));
-  const trip = fieldLen(3, fieldLen(2, [...dates, ...guests]));
+  const trip = fieldLen(3, fieldLen(2, [...fieldLen(2, dates), ...guests]));
   const money = fieldLen(5, fieldLen(1, [58, currency.length, ...Array.from(currency, c => c.charCodeAt(0))]));
   const payload = [...fieldVar(1, 0), ...trip, ...money];
 

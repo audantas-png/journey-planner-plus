@@ -65,9 +65,9 @@ function PlannerApp() {
   const activeTab = tabs.find(t => t.id === tab)!;
 
   return (
-    <div className="planner-shell min-h-screen">
+    <div className="min-h-screen bg-background">
       {/* Top brand bar */}
-      <div className="border-b border-foreground/10 bg-card/70 text-foreground backdrop-blur-xl">
+      <div className="border-b border-foreground/15 bg-foreground text-background">
         <div className="max-w-[1280px] mx-auto px-6 py-2 flex items-center justify-between text-[10px] font-mono tracking-[0.25em] uppercase">
           <span>日本 · Nihon · 2026</span>
           <span className="hidden md:inline">Diário de Viagem · Volume III · Outono</span>
@@ -80,7 +80,7 @@ function PlannerApp() {
       </div>
 
       {/* Editorial masthead */}
-      <header className="border-b border-foreground/10 bg-background/30">
+      <header className="border-b border-foreground/15">
         <div className="max-w-[1280px] mx-auto px-6 py-10">
           <div className="grid md:grid-cols-12 gap-8 items-end">
             <div className="md:col-span-8">
@@ -112,7 +112,7 @@ function PlannerApp() {
       </header>
 
       {/* Section header for active tab */}
-      <div className="sticky top-0 z-40 border-b border-foreground/10 bg-background/75 backdrop-blur-2xl">
+      <div className="border-b border-foreground/15 bg-foreground/[0.02]">
         <div className="max-w-[1280px] mx-auto px-6 py-3 flex items-center justify-between">
           <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
             § {activeTab.num} — {activeTab.label}
@@ -122,8 +122,8 @@ function PlannerApp() {
               const active = tab === t.id;
               return (
                 <button key={t.id} onClick={() => setTab(t.id)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-mono uppercase tracking-wider inline-flex items-center gap-2 transition-all ${
-                    active ? "bg-accent text-accent-foreground shadow-[0_8px_24px_oklch(0.6_0.2_25/0.24)]" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  className={`px-3 py-1.5 text-xs font-mono uppercase tracking-wider inline-flex items-center gap-2 transition-colors ${
+                    active ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
                   }`}>
                   <t.Icon className="w-3 h-3" />
                   <span className="hidden sm:inline">{t.label}</span>

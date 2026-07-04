@@ -64,9 +64,9 @@
   --color-ink: var(--ink);
   --color-paper: var(--paper);
   --color-stone: var(--stone);
-  --font-serif: 'Instrument Serif', Georgia, serif;
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
 :root {
@@ -112,44 +112,45 @@
 }
 
 .dark {
-  /* Editorial dark: ink-on-paper invertido com calor sutil para reduzir fadiga */
-  --paper: oklch(0.165 0.014 55);
-  --ink: oklch(0.965 0.006 85);
-  --stone: oklch(0.74 0.012 60);
-  --background: oklch(0.155 0.014 55);
-  --foreground: oklch(0.965 0.006 85);
-  --card: oklch(0.20 0.014 55);
-  --card-foreground: oklch(0.965 0.006 85);
-  --popover: oklch(0.21 0.014 55);
-  --popover-foreground: oklch(0.965 0.006 85);
-  --primary: oklch(0.965 0.006 85);
-  --primary-foreground: oklch(0.155 0.014 55);
-  --secondary: oklch(0.24 0.014 55);
-  --secondary-foreground: oklch(0.965 0.006 85);
-  --muted: oklch(0.26 0.012 55);
-  --muted-foreground: oklch(0.76 0.014 60);
-  --accent: oklch(0.72 0.17 30);
-  --accent-foreground: oklch(0.14 0.012 60);
-  --destructive: oklch(0.68 0.19 27);
-  --destructive-foreground: oklch(0.98 0.006 85);
-  --success: oklch(0.72 0.13 150);
-  --success-foreground: oklch(0.14 0.012 60);
-  --border: oklch(0.965 0.006 85 / 22%);
-  --input: oklch(0.965 0.006 85 / 26%);
-  --ring: oklch(0.72 0.17 30);
-  --chart-1: oklch(0.58 0.16 27);
-  --chart-2: oklch(0.72 0.08 85);
-  --chart-3: oklch(0.55 0.09 145);
-  --chart-4: oklch(0.65 0.12 300);
-  --chart-5: oklch(0.5 0.06 60);
-  --sidebar: oklch(0.18 0.014 55);
-  --sidebar-foreground: oklch(0.965 0.006 85);
-  --sidebar-primary: oklch(0.72 0.17 30);
-  --sidebar-primary-foreground: oklch(0.14 0.012 60);
-  --sidebar-accent: oklch(0.24 0.014 55);
-  --sidebar-accent-foreground: oklch(0.965 0.006 85);
-  --sidebar-border: oklch(0.965 0.006 85 / 22%);
-  --sidebar-ring: oklch(0.72 0.17 30);
+  color-scheme: dark;
+  /* Tokyo after dark: azul-grafite, vidro frio e coral inspirado no hinomaru */
+  --paper: oklch(0.145 0.024 264);
+  --ink: oklch(0.965 0.008 255);
+  --stone: oklch(0.72 0.025 255);
+  --background: oklch(0.115 0.025 264);
+  --foreground: oklch(0.965 0.008 255);
+  --card: oklch(0.185 0.03 263 / 82%);
+  --card-foreground: oklch(0.965 0.008 255);
+  --popover: oklch(0.19 0.03 263 / 96%);
+  --popover-foreground: oklch(0.965 0.008 255);
+  --primary: oklch(0.965 0.008 255);
+  --primary-foreground: oklch(0.13 0.025 264);
+  --secondary: oklch(0.22 0.035 262);
+  --secondary-foreground: oklch(0.94 0.01 255);
+  --muted: oklch(0.245 0.03 262);
+  --muted-foreground: oklch(0.72 0.028 255);
+  --accent: oklch(0.72 0.19 25);
+  --accent-foreground: oklch(0.12 0.02 264);
+  --destructive: oklch(0.67 0.2 25);
+  --destructive-foreground: oklch(0.98 0.005 255);
+  --success: oklch(0.76 0.13 178);
+  --success-foreground: oklch(0.12 0.025 264);
+  --border: oklch(0.82 0.035 255 / 18%);
+  --input: oklch(0.82 0.035 255 / 24%);
+  --ring: oklch(0.72 0.19 25);
+  --chart-1: oklch(0.72 0.19 25);
+  --chart-2: oklch(0.76 0.13 178);
+  --chart-3: oklch(0.7 0.14 250);
+  --chart-4: oklch(0.72 0.15 305);
+  --chart-5: oklch(0.78 0.13 82);
+  --sidebar: oklch(0.16 0.03 263 / 94%);
+  --sidebar-foreground: oklch(0.965 0.008 255);
+  --sidebar-primary: oklch(0.72 0.19 25);
+  --sidebar-primary-foreground: oklch(0.12 0.02 264);
+  --sidebar-accent: oklch(0.23 0.04 262);
+  --sidebar-accent-foreground: oklch(0.965 0.008 255);
+  --sidebar-border: oklch(0.82 0.035 255 / 18%);
+  --sidebar-ring: oklch(0.72 0.19 25);
 }
 
 @layer base {
@@ -161,17 +162,21 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    font-feature-settings: 'ss01', 'cv11';
+    font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
   }
 
-  h1, h2, h3, .font-serif {
+  h1,
+  h2,
+  h3,
+  .font-serif {
     font-family: var(--font-serif);
     font-weight: 400;
     letter-spacing: -0.01em;
   }
 
-  .font-mono, .tabular {
+  .font-mono,
+  .tabular {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
@@ -181,8 +186,18 @@
     font-weight: 500;
   }
   .dark body {
+    background:
+      radial-gradient(circle at 12% -8%, oklch(0.48 0.18 275 / 18%), transparent 34rem),
+      radial-gradient(circle at 92% 4%, oklch(0.58 0.2 25 / 12%), transparent 30rem),
+      var(--background);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dark ::selection {
+    background: oklch(0.72 0.19 25 / 45%);
+    color: var(--foreground);
   }
 
   /* Tiles CartoDB Dark Matter já são escuros — só normalizar fundo */
@@ -198,11 +213,42 @@
     background: oklch(0 0 0 / 0.5) !important;
     color: oklch(0.7 0.01 60) !important;
   }
-  .dark .leaflet-control-attribution a { color: var(--accent) !important; }
+  .dark .leaflet-control-attribution a {
+    color: var(--accent) !important;
+  }
   .dark .leaflet-control-zoom a {
     background: var(--card) !important;
     color: var(--foreground) !important;
     border-color: var(--border) !important;
   }
+}
 
+@layer components {
+  .dark .auth-shell,
+  .dark .planner-shell {
+    background:
+      radial-gradient(circle at 8% 0%, oklch(0.48 0.18 275 / 16%), transparent 32rem),
+      radial-gradient(circle at 96% 8%, oklch(0.58 0.2 25 / 10%), transparent 28rem),
+      linear-gradient(145deg, oklch(0.13 0.03 266), var(--background) 52%);
+  }
+
+  .dark .glass-panel {
+    background: linear-gradient(145deg, oklch(0.23 0.04 262 / 78%), oklch(0.16 0.03 264 / 72%));
+    border-color: oklch(0.88 0.025 255 / 16%);
+    box-shadow:
+      0 28px 80px oklch(0.04 0.03 265 / 55%),
+      inset 0 1px 0 oklch(1 0 0 / 7%);
+    backdrop-filter: blur(24px) saturate(130%);
+  }
+
+  .dark .modern-primary {
+    background: linear-gradient(135deg, oklch(0.76 0.18 27), oklch(0.66 0.21 17));
+    color: oklch(0.12 0.02 264);
+    box-shadow: 0 12px 34px oklch(0.6 0.22 22 / 24%);
+  }
+
+  .dark .modern-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 16px 42px oklch(0.6 0.22 22 / 32%);
+  }
 }

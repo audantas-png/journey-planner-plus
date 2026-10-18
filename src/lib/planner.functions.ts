@@ -4,18 +4,58 @@ import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-function extractJson(text: string): any | null {
+/* -------------------------------------------------------------------------- */
+/* Helpers / types                                                             */
+/* -------------------------------------------------------------------------- */
+
+function safeExtractJson(text: string): any | null {
   if (!text) return null;
+  // Try fenced code block first
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const raw = (fenced ? fenced[1] : text).trim();
-  try { return JSON.parse(raw); } catch {}
-  const first = raw.indexOf("{");
-  const last = raw.lastIndexOf("}");
-  if (first >= 0 && last > first) {
-    try { return JSON.parse(raw.slice(first, last + 1)); } catch {}
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    // fallback: try to find first { ... } block
+    const first = raw.indexOf("{");
+    const last = raw.lastIndexOf("}");
+    if (first >= 0 && last > first) {
+      try {
+        return JSON.parse(raw.slice(first, last + 1));
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
-  return null;
 }
+
+const clamp = (v: number, a = 0, b = 100) => Math.max(a, Math.min(b, Math.round(v)));
+const toInt = (v: unknown, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : fallback;
+};
+
+function isIsoDate(s: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function dateAtOffset(start: string, offset: number): string {
+  const d = new Date(start + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBetween(a: string, b: string): number {
+  const da = new Date(a + "T00:00:00Z").getTime();
+  const db = new Date(b + "T00:00:00Z").getTime();
+  return Math.max(1, Math.round((db - da) / 86400000) + 1);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Suggest activities                                                           */
+/* -------------------------------------------------------------------------- */
 
 const SuggestInput = z.object({
   city: z.string().min(1).max(100),
@@ -24,7 +64,15 @@ const SuggestInput = z.object({
 });
 
 const ALLOWED_CATS = new Set([
-  "templo","gastronomia","natureza","museu","experiencia","compras","festival","evento","geral",
+  "templo",
+  "gastronomia",
+  "natureza",
+  "museu",
+  "experiencia",
+  "compras",
+  "festival",
+  "evento",
+  "geral",
 ]);
 
 export type Suggestion = {
@@ -35,14 +83,6 @@ export type Suggestion = {
   duration_minutes: number;
   tip: string;
   date_specific: boolean;
-};
-
-export type ItineraryAlert = {
-  severity: string;
-  day_numbers: number[];
-  title: string;
-  body: string;
-  suggestion: string;
 };
 
 export const suggestActivities = createServerFn({ method: "POST" })
@@ -61,6 +101,7 @@ export const suggestActivities = createServerFn({ method: "POST" })
         year: "numeric",
         timeZone: "UTC",
       });
+
       const { text } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
         system: `Você é um curador de viagens especializado em Japão. Devolva SOMENTE JSON válido, sem markdown, sem comentários.`,
@@ -85,17 +126,22 @@ Responda APENAS com este JSON:
   ]
 }`,
       });
-      const parsed = extractJson(text);
+
+      const parsed = safeExtractJson(text);
       const rawList = Array.isArray(parsed?.suggestions) ? parsed.suggestions : [];
-      const suggestions: Suggestion[] = rawList.map((s: any): Suggestion => ({
-        title: String(s?.title ?? "").slice(0, 200),
-        description: String(s?.description ?? "").slice(0, 600),
-        category: ALLOWED_CATS.has(String(s?.category)) ? String(s.category) : "geral",
-        avg_cost_jpy: Number.isFinite(Number(s?.avg_cost_jpy)) ? Math.max(0, Math.round(Number(s.avg_cost_jpy))) : 0,
-        duration_minutes: Number.isFinite(Number(s?.duration_minutes)) ? Math.max(0, Math.round(Number(s.duration_minutes))) : 60,
-        tip: String(s?.tip ?? "").slice(0, 300),
-        date_specific: Boolean(s?.date_specific),
-      })).filter((s: Suggestion) => Boolean(s.title));
+
+      const suggestions: Suggestion[] = rawList
+        .map((s: any): Suggestion => ({
+          title: String(s?.title ?? "").slice(0, 200),
+          description: String(s?.description ?? "").slice(0, 600),
+          category: ALLOWED_CATS.has(String(s?.category)) ? String(s.category) : "geral",
+          avg_cost_jpy: Math.max(0, toInt(s?.avg_cost_jpy, 0)),
+          duration_minutes: Math.max(0, toInt(s?.duration_minutes, 60)),
+          tip: String(s?.tip ?? "").slice(0, 300),
+          date_specific: Boolean(s?.date_specific),
+        }))
+        .filter((s: Suggestion) => Boolean(s.title));
+
       if (!suggestions.length) return { suggestions: [], error: "IA retornou resposta vazia. Tente novamente." };
       return { suggestions, error: null };
     } catch (e) {
@@ -104,6 +150,10 @@ Responda APENAS com este JSON:
       return { suggestions: [], error: msg.slice(0, 200) };
     }
   });
+
+/* -------------------------------------------------------------------------- */
+/* Analyze itinerary                                                            */
+/* -------------------------------------------------------------------------- */
 
 const AnalyzeInput = z.object({
   days: z
@@ -120,7 +170,15 @@ const AnalyzeInput = z.object({
     .max(40),
 });
 
-const ALLOWED_SEV = new Set(["critical","warning","info"]);
+const ALLOWED_SEV = new Set(["critical", "warning", "info"]);
+
+export type ItineraryAlert = {
+  severity: string;
+  day_numbers: number[];
+  title: string;
+  body: string;
+  suggestion: string;
+};
 
 export const analyzeItinerary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -131,16 +189,13 @@ export const analyzeItinerary = createServerFn({ method: "POST" })
     try {
       const gateway = createLovableAiGatewayProvider(key);
       const list = data.days
-        .map(
-          (d) =>
-            `D${String(d.day_number).padStart(2, "0")} ${d.date} · ${d.city} [${d.phase}] — ${d.summary ?? ""}`,
-        )
+        .map((d) => `D${String(d.day_number).padStart(2, "0")} ${d.date} · ${d.city} [${d.phase}] — ${d.summary ?? ""}`)
         .join("\n");
 
       const { text } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
         system: `Você é um logista de viagens pelo Japão. Devolva SOMENTE JSON válido, sem markdown, sem comentários.`,
-        prompt: `Analise a sequência de cidades buscando ineficiências reais (zigue-zague, trechos >5h, tempo insuficiente, ordenação inversa, conflitos sazonais como Ghibli fechado às terças). Não invente problemas; se estiver bom, alerts=[] e score alto.
+        prompt: `Analise a sequência de cidades buscando ineficiências reais (zigue-zague, trechos >5h, tempo insuficiente, ordenação inversa, conflitos sazonais como Ghibli fechado às terç[...]
 
 Itinerário (100% terrestre, JR Pass 21d, voo GRU↔HND):
 ${list}
@@ -160,16 +215,22 @@ Responda APENAS com este JSON:
   ]
 }`,
       });
-      const parsed = extractJson(text);
+
+      const parsed = safeExtractJson(text);
       const rawAlerts = Array.isArray(parsed?.alerts) ? parsed.alerts : [];
-      const alerts: ItineraryAlert[] = rawAlerts.map((a: any): ItineraryAlert => ({
-        severity: ALLOWED_SEV.has(String(a?.severity)) ? String(a.severity) : "info",
-        day_numbers: Array.isArray(a?.day_numbers) ? a.day_numbers.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [],
-        title: String(a?.title ?? "").slice(0, 200),
-        body: String(a?.body ?? "").slice(0, 800),
-        suggestion: String(a?.suggestion ?? "").slice(0, 400),
-      })).filter((a: ItineraryAlert) => Boolean(a.title));
-      const score = Number.isFinite(Number(parsed?.score)) ? Math.max(0, Math.min(100, Math.round(Number(parsed.score)))) : 0;
+      const alerts: ItineraryAlert[] = rawAlerts
+        .map((a: any): ItineraryAlert => ({
+          severity: ALLOWED_SEV.has(String(a?.severity)) ? String(a.severity) : "info",
+          day_numbers: Array.isArray(a?.day_numbers)
+            ? a.day_numbers.map((n: any) => toInt(n)).filter((n: number) => Number.isFinite(n))
+            : [],
+          title: String(a?.title ?? "").slice(0, 200),
+          body: String(a?.body ?? "").slice(0, 800),
+          suggestion: String(a?.suggestion ?? "").slice(0, 400),
+        }))
+        .filter((a: ItineraryAlert) => Boolean(a.title));
+
+      const score = Number.isFinite(Number(parsed?.score)) ? clamp(Number(parsed.score), 0, 100) : 0;
       const summary = String(parsed?.summary ?? "").slice(0, 600);
       if (!parsed) return { alerts: [], summary: "", score: 0, error: "IA retornou resposta inválida. Tente novamente." };
       return { alerts, summary, score, error: null };
@@ -180,13 +241,23 @@ Responda APENAS com este JSON:
     }
   });
 
-// ============================================================
-// REROTEIRIZADOR — gera nova sequência de cidades via IA
-// ============================================================
+/* -------------------------------------------------------------------------- */
+/* Regenerate itinerary                                                          */
+/* -------------------------------------------------------------------------- */
 
 const ALLOWED_PHASES = new Set([
-  "arrival","tokyo","onsen","transit","kyoto","ghibli","kansai",
-  "osaka","hiroshima","kyushu","hokkaido","departure",
+  "arrival",
+  "tokyo",
+  "onsen",
+  "transit",
+  "kyoto",
+  "ghibli",
+  "kansai",
+  "osaka",
+  "hiroshima",
+  "kyushu",
+  "hokkaido",
+  "departure",
 ]);
 
 const RegenInput = z.object({
@@ -212,18 +283,6 @@ export type ProposedCity = {
   region: string;
 };
 
-function daysBetween(a: string, b: string): number {
-  const da = new Date(a + "T00:00:00Z").getTime();
-  const db = new Date(b + "T00:00:00Z").getTime();
-  return Math.max(1, Math.round((db - da) / 86400000) + 1);
-}
-
-function dateAtOffset(start: string, offset: number): string {
-  const d = new Date(start + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + offset);
-  return d.toISOString().slice(0, 10);
-}
-
 export const regenerateItinerary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => RegenInput.parse(input))
@@ -231,16 +290,20 @@ export const regenerateItinerary = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) {
       return { days: [], cities: [], rationale: "", error: "Lovable AI indisponível" } as {
-        days: ProposedDay[]; cities: ProposedCity[]; rationale: string; error: string | null;
+        days: ProposedDay[];
+        cities: ProposedCity[];
+        rationale: string;
+        error: string | null;
       };
     }
+
     const totalDays = daysBetween(data.startDate, data.endDate);
     try {
       const gateway = createLovableAiGatewayProvider(key);
       const { text } = await generateText({
         model: gateway("google/gemini-2.5-flash"),
-        system: `Você é um planejador especialista em viagens 100% terrestres pelo Japão (JR Pass 21d, voo internacional GRU↔HND). Devolva SOMENTE JSON válido, sem markdown, sem comentários.`,
-        prompt: `Gere um novo roteiro otimizado para ${totalDays} dias entre ${data.startDate} e ${data.endDate}, visitando EXATAMENTE ${data.targetCities} cidades distintas (paradas únicas — não conte retornos a uma cidade já visitada como nova cidade).
+        system: `Você é um planejador especialista em viagens 100% terrestres pelo Japão (JR Pass 21d, voo internacional GRU↔HND). Devolva SOMENTE JSON válido, sem markdown, sem comentário[...]`,
+        prompt: `Gere um novo roteiro otimizado para ${totalDays} dias entre ${data.startDate} e ${data.endDate}, visitando EXATAMENTE ${data.targetCities} cidades distintas (paradas únicas — [...]
 
 Regras:
 - Cubra TODOS os ${totalDays} dias do início ao fim, um registro por dia.
@@ -264,7 +327,8 @@ Responda APENAS com este JSON:
   ]
 }`,
       });
-      const parsed = extractJson(text);
+
+      const parsed = safeExtractJson(text);
       if (!parsed) {
         return { days: [], cities: [], rationale: "", error: "IA retornou resposta inválida. Tente novamente." };
       }
@@ -280,10 +344,9 @@ Responda APENAS com este JSON:
         }))
         .filter((d: ProposedDay) => Boolean(d.city));
 
-      // Normaliza: ordena por day_number e força preencher todos os dias
+      // Normalize: order and ensure all days present
       days.sort((a, b) => a.day_number - b.day_number);
       if (days.length !== totalDays) {
-        // Tenta preencher / truncar para encaixar
         const fill: ProposedDay[] = [];
         for (let i = 0; i < totalDays; i++) {
           const src = days[i] ?? days[days.length - 1];
@@ -298,8 +361,10 @@ Responda APENAS com este JSON:
         days = fill;
       } else {
         days = days.map((d, i) => ({ ...d, day_number: i + 1, date: dateAtOffset(data.startDate, i) }));
-        days[0].phase = "arrival";
-        days[days.length - 1].phase = "departure";
+        if (days.length) {
+          days[0].phase = "arrival";
+          days[days.length - 1].phase = "departure";
+        }
       }
 
       const rawCities = Array.isArray(parsed?.cities) ? parsed.cities : [];
@@ -325,9 +390,9 @@ Responda APENAS com este JSON:
     }
   });
 
-// ============================================================
-// BUSCA DE OFERTAS — hotéis + ingressos com fallback resiliente
-// ============================================================
+/* -------------------------------------------------------------------------- */
+/* Deals / fallback utilities                                                   */
+/* -------------------------------------------------------------------------- */
 
 const DealsInput = z.object({
   city: z.string().min(1).max(80),
@@ -360,6 +425,7 @@ function googleHotelsTs(checkin?: string, checkout?: string, currency = "BRL", a
   const dateRe = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRe.test(checkin) || !dateRe.test(checkout)) return null;
 
+  // The function builds a compact payload and base64-url encodes it. Keep logic but split
   const varint = (value: number) => {
     const bytes: number[] = [];
     let n = value;
@@ -380,7 +446,7 @@ function googleHotelsTs(checkin?: string, checkout?: string, currency = "BRL", a
   const dates = [...fieldLen(1, dateField(checkin)), ...fieldLen(2, dateField(checkout))];
   const guests = fieldLen(6, fieldVar(1, adults));
   const trip = fieldLen(3, fieldLen(2, [...fieldLen(2, dates), ...guests]));
-  const money = fieldLen(5, fieldLen(1, [58, currency.length, ...Array.from(currency, c => c.charCodeAt(0))]));
+  const money = fieldLen(5, fieldLen(1, [58, currency.length, ...Array.from(currency, (c) => c.charCodeAt(0))]));
   const payload = [...fieldVar(1, 0), ...trip, ...money];
 
   return globalThis.btoa(String.fromCharCode(...payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -493,33 +559,38 @@ JSON:
   ]
 }`,
       });
-      const parsed = extractJson(text);
+
+      const parsed = safeExtractJson(text);
       const rawHotels = Array.isArray(parsed?.hotels) ? parsed.hotels : [];
       const rawTickets = Array.isArray(parsed?.tickets) ? parsed.tickets : [];
 
-      const hotels: HotelDeal[] = rawHotels.map((h: any): HotelDeal => {
-        const name = String(h?.name ?? "").slice(0, 160).trim();
-        const area = String(h?.area ?? "").slice(0, 80).trim();
-        return {
-          name,
-          area,
-          approx_jpy_per_night: Number.isFinite(Number(h?.approx_jpy_per_night)) ? Math.max(0, Math.round(Number(h.approx_jpy_per_night))) : 0,
-          why: String(h?.why ?? "").slice(0, 240),
-          booking_url: buildBookingUrl(data.city, area || name, data.checkin, data.checkout),
-          google_hotels_url: buildGoogleHotelsUrl(data.city, name || area, data.checkin, data.checkout),
-        };
-      }).filter((h: HotelDeal) => Boolean(h.name));
+      const hotels: HotelDeal[] = rawHotels
+        .map((h: any): HotelDeal => {
+          const name = String(h?.name ?? "").slice(0, 160).trim();
+          const area = String(h?.area ?? "").slice(0, 80).trim();
+          return {
+            name,
+            area,
+            approx_jpy_per_night: Math.max(0, toInt(h?.approx_jpy_per_night, 0)),
+            why: String(h?.why ?? "").slice(0, 240),
+            booking_url: buildBookingUrl(data.city, area || name, data.checkin, data.checkout),
+            google_hotels_url: buildGoogleHotelsUrl(data.city, name || area, data.checkin, data.checkout),
+          };
+        })
+        .filter((h: HotelDeal) => Boolean(h.name));
 
-      const tickets: TicketDeal[] = rawTickets.map((t: any): TicketDeal => {
-        const name = String(t?.name ?? "").slice(0, 160).trim();
-        return {
-          name,
-          approx_jpy: Number.isFinite(Number(t?.approx_jpy)) ? Math.max(0, Math.round(Number(t.approx_jpy))) : 0,
-          why: String(t?.why ?? "").slice(0, 240),
-          klook_url: buildKlookUrl(`${name} ${data.city}`),
-          gyg_url: buildGygUrl(`${name} ${data.city}`),
-        };
-      }).filter((t: TicketDeal) => Boolean(t.name));
+      const tickets: TicketDeal[] = rawTickets
+        .map((t: any): TicketDeal => {
+          const name = String(t?.name ?? "").slice(0, 160).trim();
+          return {
+            name,
+            approx_jpy: Math.max(0, toInt(t?.approx_jpy, 0)),
+            why: String(t?.why ?? "").slice(0, 240),
+            klook_url: buildKlookUrl(`${name} ${data.city}`),
+            gyg_url: buildGygUrl(`${name} ${data.city}`),
+          };
+        })
+        .filter((t: TicketDeal) => Boolean(t.name));
 
       if (!hotels.length && !tickets.length) {
         return { hotels: fb.hotels, tickets: fb.tickets, usedFallback: true, error: "IA retornou vazio — usando buscas diretas." };

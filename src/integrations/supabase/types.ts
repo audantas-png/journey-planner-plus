@@ -85,6 +85,7 @@ export type Database = {
           id: string
           kind: string
           position: number
+          purchased: boolean
           text: string
         }
         Insert: {
@@ -94,6 +95,7 @@ export type Database = {
           id?: string
           kind?: string
           position?: number
+          purchased?: boolean
           text: string
         }
         Update: {
@@ -103,6 +105,7 @@ export type Database = {
           id?: string
           kind?: string
           position?: number
+          purchased?: boolean
           text?: string
         }
         Relationships: [
@@ -220,6 +223,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hotel_reservations: {
+        Row: {
+          amount_brl: number
+          breakfast_status: string
+          checkin: string
+          checkout: string
+          city: string
+          created_at: string
+          guests: number
+          hotel_name: string
+          id: string
+          payment_status: string
+          room_description: string | null
+          status: string
+        }
+        Insert: {
+          amount_brl?: number
+          breakfast_status?: string
+          checkin: string
+          checkout: string
+          city: string
+          created_at?: string
+          guests?: number
+          hotel_name: string
+          id?: string
+          payment_status?: string
+          room_description?: string | null
+          status?: string
+        }
+        Update: {
+          amount_brl?: number
+          breakfast_status?: string
+          checkin?: string
+          checkout?: string
+          city?: string
+          created_at?: string
+          guests?: number
+          hotel_name?: string
+          id?: string
+          payment_status?: string
+          room_description?: string | null
+          status?: string
+        }
+        Relationships: []
       }
       trip_days: {
         Row: {

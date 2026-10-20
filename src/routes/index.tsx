@@ -58,5 +58,13 @@ function IndexPage() {
 }
 
 export const Route = createFileRoute("/")({
+  head: () => ({ meta: [
+    { title: "Japão 2026 — Reservas e planejador de viagem" },
+    { name: "description", content: "Roteiro, reservas de hotéis, orçamento e preparativos da viagem de Aurélio e Hameceli ao Japão em novembro de 2026." },
+    { property: "og:title", content: "Japão 2026 — Reservas e planejador de viagem" },
+    { property: "og:description", content: "Reservas confirmadas, roteiro terrestre, gastos e bagagem em um só planejador." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: IndexPage,
 });

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Luggage, ShoppingBag, Plus, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import type { ChecklistItem } from "./queries";
+import { Button } from "@/components/ui/button";
 
 type Kind = "pack" | "buy";
 
@@ -70,6 +71,12 @@ function ChecklistColumn({
     qc.invalidateQueries({ queryKey: ["checklist"] });
   }
 
+  async function togglePurchased(item: ChecklistItem) {
+    const { error } = await supabase.from("checklist_items").update({ purchased: !item.purchased }).eq("id", item.id);
+    if (error) { toast.error("Não foi possível atualizar a compra."); return; }
+    qc.invalidateQueries({ queryKey: ["checklist"] });
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
     const text = adding.trim();
@@ -116,10 +123,11 @@ function ChecklistColumn({
       <ul className="divide-y divide-foreground/10">
         {sorted.map(item => (
           <li key={item.id} className="group flex items-center gap-3 px-5 py-3 hover:bg-foreground/[0.03]">
-            <button
+            <Button variant="ghost" size="icon"
               type="button"
               onClick={() => toggle(item)}
-              aria-label={item.done ? "Desmarcar" : "Marcar como feito"}
+              aria-label={item.done ? "Desmarcar" : kind === "pack" ? "Marcar como na mala" : "Marcar como feito"}
+              title={kind === "pack" ? "Na mala" : "Concluído"}
               className={`w-5 h-5 border flex items-center justify-center shrink-0 transition-colors ${
                 item.done
                   ? "bg-accent border-accent text-accent-foreground"
@@ -127,18 +135,20 @@ function ChecklistColumn({
               }`}
             >
               {item.done && <Check className="w-3 h-3" strokeWidth={3} />}
-            </button>
+            </Button>
             <span className={`flex-1 text-sm ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
               {item.text}
+              {item.purchased && <span className="block text-xs text-success mt-1">{item.text.includes("compra parcial") ? "Compra parcial" : "Comprado"}{kind === "pack" && !item.done ? " · ainda não está na mala" : ""}</span>}
             </span>
-            <button
+            <Button variant="ghost" size="icon" type="button" aria-label={item.purchased ? "Desmarcar compra" : "Marcar como comprado"} title={item.purchased ? "Desmarcar compra" : "Marcar como comprado"} onClick={() => togglePurchased(item)} className={item.purchased ? "text-success shrink-0" : "text-muted-foreground shrink-0"}><ShoppingBag className="w-4 h-4" /></Button>
+            <Button variant="ghost" size="icon"
               type="button"
               onClick={() => remove(item.id)}
               aria-label="Remover item"
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+              className="text-muted-foreground hover:text-destructive shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </li>
         ))}
         {sorted.length === 0 && (
@@ -155,13 +165,13 @@ function ChecklistColumn({
           placeholder={kind === "pack" ? "Ex: Adaptador de tomada" : "Ex: Ingresso teamLab"}
           className="flex-1 bg-transparent border border-foreground/20 px-3 py-2 text-sm focus:outline-none focus:border-accent placeholder:text-muted-foreground/60"
         />
-        <button
+         <Button
           type="submit"
           disabled={!adding.trim()}
           className="inline-flex items-center gap-1.5 bg-foreground text-background px-3 py-2 text-xs font-mono uppercase tracking-widest disabled:opacity-40 hover:bg-foreground/85"
         >
           <Plus className="w-3.5 h-3.5" /> Adicionar
-        </button>
+         </Button>
       </form>
     </section>
   );

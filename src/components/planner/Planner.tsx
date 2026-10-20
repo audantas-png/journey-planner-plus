@@ -8,6 +8,7 @@ import { TripMap } from "./Map";
 import { Activities } from "./Activities";
 import { Packing } from "./Packing";
 import { Deals } from "./Deals";
+import { Reservations } from "./Reservations";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
   fetchChecklist, fetchGeo, fetchFxRate, fetchFxMulti, fxRateWithIof, IOF_RATE, PHASES,
@@ -62,7 +63,7 @@ function PlannerApp() {
     { id: "deals", label: "Ofertas", num: "07", Icon: Tag },
   ];
 
-  const activeTab = tabs.find(t => t.id === tab)!;
+  const activeTab = tabs.find(t => t.id === tab) ?? tabs[0];
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,7 +96,7 @@ function PlannerApp() {
               </h1>
               <p className="text-sm text-muted-foreground mt-6 max-w-md leading-relaxed">
                 Terceira travessia. De Tóquio à Kyushu, sem voos domésticos —
-                apenas Shinkansen, ryokan e quilômetros de koyo.
+                roteiro em planejamento, com uma reserva de hotel confirmada em Tóquio.
                 Por <span className="text-foreground">Aurélio Dantas</span> &amp; <span className="text-foreground">Hameceli Francisquini</span>.
               </p>
             </div>
@@ -104,7 +105,7 @@ function PlannerApp() {
               <div className="font-serif text-7xl tabular leading-none mt-2">{daysLeft}</div>
               <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground mt-2">dias até partir</div>
               <div className="mt-4 inline-flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-accent">
-                <Train className="w-3 h-3" /> JR Pass · 21 dias
+                <Train className="w-3 h-3" /> Transporte terrestre · a planejar
               </div>
             </div>
           </div>
@@ -115,7 +116,7 @@ function PlannerApp() {
       <div className="border-b border-foreground/15 bg-foreground/[0.02]">
         <div className="max-w-[1280px] mx-auto px-6 py-3 flex items-center justify-between">
           <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-            § {activeTab.num} — {activeTab.label}
+            § {activeTab?.num} — {activeTab?.label}
           </div>
           <nav className="flex gap-1">
             {tabs.map(t => {
@@ -135,6 +136,7 @@ function PlannerApp() {
       </div>
 
       <main className="max-w-[1280px] mx-auto px-6 py-12">
+        {(tab === "overview" || tab === "deals" || tab === "budget") && <div className="mb-10"><Reservations days={days.data ?? []} preparations={tab === "overview"} /></div>}
         {tab === "overview" && <Overview days={days.data ?? []} acts={acts.data ?? []} budget={budget.data ?? []} expenses={expenses.data ?? []} daysLeft={daysLeft} fxRate={fxRate} tripStart={tripStart} tripEnd={tripEnd} />}
         {tab === "itinerary" && <Itinerary days={days.data ?? []} acts={acts.data ?? []} checklist={checklist.data ?? []} />}
         {tab === "map" && <MapTab days={days.data ?? []} geo={geo.data ?? []} />}

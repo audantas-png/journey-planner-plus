@@ -22,9 +22,28 @@ export type Expense = {
 };
 export type ChecklistItem = {
   id: string; day_id: string | null; text: string; done: boolean; position: number;
+  purchased: boolean;
   kind: "day" | "pack" | "buy";
 };
 export type CityGeo = { city: string; lat: number; lng: number; region: string | null };
+
+export type HotelReservation = {
+  id: string; hotel_name: string; city: string; checkin: string; checkout: string;
+  guests: number; room_description: string | null; amount_brl: number;
+  status: "confirmed" | "cancelled";
+  payment_status: "unconfirmed" | "paid" | "pending";
+  breakfast_status: "unconfirmed" | "included" | "not_included";
+};
+
+export async function fetchReservations(): Promise<HotelReservation[]> {
+  const { data, error } = await supabase.from("hotel_reservations").select("*").order("checkin");
+  if (error) throw error;
+  return data.map(row => ({ ...row,
+    status: row.status === "cancelled" ? "cancelled" : "confirmed",
+    payment_status: row.payment_status === "paid" ? "paid" : row.payment_status === "pending" ? "pending" : "unconfirmed",
+    breakfast_status: row.breakfast_status === "included" ? "included" : row.breakfast_status === "not_included" ? "not_included" : "unconfirmed",
+  }));
+}
 
 export const fetchDays = async () => {
   const { data, error } = await supabase.from("trip_days").select("*").order("position");

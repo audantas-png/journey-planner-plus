@@ -38,7 +38,11 @@ export type HotelReservation = {
 export async function fetchReservations(): Promise<HotelReservation[]> {
   const { data, error } = await supabase.from("hotel_reservations").select("*").order("checkin");
   if (error) throw error;
-  return data;
+  return data.map(row => ({ ...row,
+    status: row.status === "cancelled" ? "cancelled" : "confirmed",
+    payment_status: row.payment_status === "paid" ? "paid" : row.payment_status === "pending" ? "pending" : "unconfirmed",
+    breakfast_status: row.breakfast_status === "included" ? "included" : row.breakfast_status === "not_included" ? "not_included" : "unconfirmed",
+  }));
 }
 
 export const fetchDays = async () => {

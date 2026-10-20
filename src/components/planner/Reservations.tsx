@@ -61,6 +61,15 @@ export function Reservations({ days, preparations = false }: { days: TripDay[]; 
       <AlertTriangle className="size-5 shrink-0 text-accent" /><div className="space-y-2"><h3 className="font-medium">Hospedagem e roteiro precisam de revisão</h3>
       <p className="text-sm text-muted-foreground">Há {conflicts.length} dias planejados fora de Tóquio durante a reserva. Confirme quais são bate-voltas e quais exigem pernoite em outra cidade antes de alterar ou reservar hotéis.</p>
       <p className="text-xs text-muted-foreground">Cidades a revisar: {Array.from(new Set(conflicts.map(d => d.city))).join(" · ")}. Seu roteiro foi preservado.</p>
+      <details className="pt-1">
+        <summary className="cursor-pointer text-sm font-medium text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">Ver dias a revisar</summary>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {conflicts.map(day => <li key={day.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border py-2 text-sm">
+            <span className="font-mono text-xs text-muted-foreground">Dia {day.day_number} · {date(day.date)}</span>
+            <span className="text-foreground">{day.city}</span>
+          </li>)}
+        </ul>
+      </details>
     </div></div>}
     {preparations && <div className="flex items-start gap-3 text-sm"><ShoppingBag className="size-5 text-success shrink-0" /><div><p>Higiene para o voo: compra parcial informada</p><p className="text-muted-foreground mt-1">Os itens específicos e os valores ainda não foram informados. Falta conferir o restante e colocar na bagagem.</p></div></div>}
   </section>;

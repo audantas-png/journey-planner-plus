@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type TripDay = {
   id: string; day_number: number; date: string; city: string;
   phase: string; summary: string | null; notes: string | null; position: number;
+  status?: string; kind?: string;
 };
 export type DayActivity = {
   id: string; day_id: string; title: string; description: string | null;

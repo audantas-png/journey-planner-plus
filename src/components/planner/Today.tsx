@@ -86,7 +86,7 @@ export function Today({ days, acts, budget }: { days: TripDay[]; acts: DayActivi
       <section>
         <h3 className="font-serif text-2xl mb-3">Próximos dias</h3>
         {overnights.length > 0 && (
-          <div className="border border-warning/40 text-warning text-xs p-3 mb-3">
+          <div className="border border-destructive/40 text-destructive text-xs p-3 mb-3">
             {overnights.length} pernoite(s) fora de Tóquio antes de 20/11 — o hotel em Tóquio continua reservado nessas noites (diária dupla).
           </div>
         )}

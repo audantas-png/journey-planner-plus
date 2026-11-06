@@ -8,6 +8,13 @@
       "when": 1792464127464,
       "tag": "0000_travel_reservations_and_purchases",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793925737614,
+      "tag": "0001_trip_day_status_kind",
+      "breakpoints": true
     }
   ]
 }

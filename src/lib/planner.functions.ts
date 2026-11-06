@@ -634,7 +634,7 @@ export const replanRemainingDays = createServerFn({ method: "POST" })
       const gateway = createLovableAiGatewayProvider(key);
       const lived = data.lived.map((d) => `${d.date} · ${d.city} — ${d.summary ?? ""}`).join("\n");
       const { text } = await generateText({
-        model: gateway("google/gemini-2.5-flash"),
+        model: gateway("google/gemini-3.8-flash"),
         system: "Você é um planejador de viagens pelo Japão para quem JÁ está viajando. Devolva SOMENTE JSON válido.",
         prompt: `Hoje é ${data.today}. O viajante já fez:
 ${lived || "nada"}

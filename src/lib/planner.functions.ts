@@ -608,3 +608,62 @@ JSON:
       };
     }
   });
+
+/* -------------------------------------------------------------------------- */
+/* Replan remaining days (in-trip)                                              */
+/* -------------------------------------------------------------------------- */
+
+const ReplanInput = z.object({
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  lived: z.array(z.object({ date: z.string(), city: z.string(), summary: z.string().nullable() })).max(40),
+  remaining: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(40),
+  baseCity: z.string().max(80),
+  baseUntil: z.string().max(20),
+  notes: z.string().max(800).optional(),
+});
+
+export type ReplanProposal = { date: string; city: string; kind: string; summary: string };
+
+export const replanRemainingDays = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ReplanInput.parse(input))
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) return { days: [] as ReplanProposal[], rationale: "", error: "IA indisponível" };
+    try {
+      const gateway = createLovableAiGatewayProvider(key);
+      const lived = data.lived.map((d) => `${d.date} · ${d.city} — ${d.summary ?? ""}`).join("\n");
+      const { text } = await generateText({
+        model: gateway("google/gemini-2.5-flash"),
+        system: "Você é um planejador de viagens pelo Japão para quem JÁ está viajando. Devolva SOMENTE JSON válido.",
+        prompt: `Hoje é ${data.today}. O viajante já fez:
+${lived || "nada"}
+
+Planeje SOMENTE estas datas restantes: ${data.remaining.join(", ")}.
+Regras:
+- Hotel já reservado em ${data.baseCity} até ${data.baseUntil} (check-out). Prefira bate-voltas (kind "day_trip") a partir de ${data.baseCity}; pernoite fora ("overnight") só quando valer muito a pena (ex.: Kyoto/Osaka 2-3 noites seguidas) e avise do custo de diária dupla no summary.
+- Sem voos domésticos; Shinkansen/trens. Não repita o que já foi feito. Último dia = voo de volta saindo de Haneda.
+- Viajante quer Kyoto, Osaka e Hakone se possível. Considere outono (koyo) de novembro.
+${data.notes ? `- Preferências: ${data.notes}` : ""}
+
+JSON:
+{"rationale":"2-3 frases","days":[{"date":"YYYY-MM-DD","city":"Nome","kind":"base|day_trip|overnight","summary":"plano do dia em pt-BR, com transporte"}]}`,
+      });
+      const parsed = safeExtractJson(text);
+      if (!parsed) return { days: [] as ReplanProposal[], rationale: "", error: "IA retornou resposta inválida. Tente novamente." };
+      const allowed = new Set(data.remaining);
+      const kinds = new Set(["base", "day_trip", "overnight"]);
+      const days: ReplanProposal[] = (Array.isArray(parsed.days) ? parsed.days : [])
+        .map((d: any) => ({
+          date: String(d?.date ?? "").slice(0, 10),
+          city: String(d?.city ?? "").slice(0, 80).trim(),
+          kind: kinds.has(String(d?.kind)) ? String(d.kind) : "base",
+          summary: String(d?.summary ?? "").slice(0, 500),
+        }))
+        .filter((d: ReplanProposal) => allowed.has(d.date) && d.city);
+      return { days, rationale: String(parsed.rationale ?? "").slice(0, 600), error: null as string | null };
+    } catch (e) {
+      console.error("[replanRemainingDays]", e);
+      return { days: [] as ReplanProposal[], rationale: "", error: "Falha ao replanejar. Tente novamente." };
+    }
+  });

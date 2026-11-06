@@ -276,9 +276,11 @@ export type Database = {
           date: string
           day_number: number
           id: string
+          kind: string
           notes: string | null
           phase: string
           position: number
+          status: string
           summary: string | null
           updated_at: string
         }
@@ -288,9 +290,11 @@ export type Database = {
           date: string
           day_number: number
           id?: string
+          kind?: string
           notes?: string | null
           phase?: string
           position: number
+          status?: string
           summary?: string | null
           updated_at?: string
         }
@@ -300,9 +304,11 @@ export type Database = {
           date?: string
           day_number?: number
           id?: string
+          kind?: string
           notes?: string | null
           phase?: string
           position?: number
+          status?: string
           summary?: string | null
           updated_at?: string
         }

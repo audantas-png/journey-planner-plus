@@ -9,6 +9,8 @@ import { Activities } from "./Activities";
 import { Packing } from "./Packing";
 import { Deals } from "./Deals";
 import { Reservations } from "./Reservations";
+import { Today } from "./Today";
+import { Sun } from "lucide-react";
 import {
   fetchDays, fetchActivities, fetchCatalog, fetchBudget, fetchExpenses,
   fetchChecklist, fetchGeo, fetchFxRate, fetchFxMulti, fxRateWithIof, IOF_RATE, PHASES,
@@ -33,10 +35,10 @@ export function Planner() {
   return <PlannerApp />;
 }
 
-type Tab = "overview" | "itinerary" | "map" | "activities" | "budget" | "packing" | "deals";
+type Tab = "today" | "overview" | "itinerary" | "map" | "activities" | "budget" | "packing" | "deals";
 
 function PlannerApp() {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(() => Date.now() >= Date.parse("2026-11-01T00:00:00+09:00") && Date.now() < Date.parse("2026-11-21T00:00:00+09:00") ? "today" : "overview");
 
   const days = useQuery({ queryKey: ["days"], queryFn: fetchDays });
   const acts = useQuery({ queryKey: ["acts"], queryFn: fetchActivities });
@@ -54,6 +56,7 @@ function PlannerApp() {
   const daysLeft = Math.max(0, Math.ceil((tripStart.getTime() - Date.now()) / 86400000));
 
   const tabs: { id: Tab; label: string; num: string; Icon: any }[] = [
+    { id: "today", label: "Hoje", num: "00", Icon: Sun },
     { id: "overview", label: "Visão geral", num: "01", Icon: Compass },
     { id: "itinerary", label: "Roteiro diário", num: "02", Icon: CalendarDays },
     { id: "map", label: "Mapa da rota", num: "03", Icon: MapIcon },
@@ -137,6 +140,7 @@ function PlannerApp() {
 
       <main className="max-w-[1280px] mx-auto px-6 py-12">
         {(tab === "overview" || tab === "deals" || tab === "budget") && <div className="mb-10"><Reservations days={days.data ?? []} preparations={tab === "overview"} /></div>}
+        {tab === "today" && <Today days={days.data ?? []} acts={acts.data ?? []} budget={budget.data ?? []} />}
         {tab === "overview" && <Overview days={days.data ?? []} acts={acts.data ?? []} budget={budget.data ?? []} expenses={expenses.data ?? []} daysLeft={daysLeft} fxRate={fxRate} tripStart={tripStart} tripEnd={tripEnd} />}
         {tab === "itinerary" && <Itinerary days={days.data ?? []} acts={acts.data ?? []} checklist={checklist.data ?? []} />}
         {tab === "map" && <MapTab days={days.data ?? []} geo={geo.data ?? []} />}
